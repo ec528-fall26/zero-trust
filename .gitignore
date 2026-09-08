@@ -1,0 +1,24 @@
+# Build output
+build/
+dist/
+target/
+*.o
+*.so
+*.pyc
+__pycache__/
+
+# Environments
+.venv/
+venv/
+node_modules/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Secrets — never commit cloud credentials
+.env
+*.pem
+*.key
+credentials
