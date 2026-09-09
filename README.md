@@ -32,7 +32,7 @@ demo or in the final presentation has a corresponding script in `experiments/`.
 
 Deliverables are collected from a **branch named for the demo**, at **12:00 noon**
 on the day of that demo. See the
-[submission instructions](https://yigonghu.github.io/ec528/fall26/setup/).
+[submission instructions](https://ec528.github.io/ec528/fall26/setup/).
 
 | Deliverable | Branch | Must contain |
 | --- | --- | --- |
