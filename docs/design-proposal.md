@@ -2,7 +2,7 @@
 
 *Due in the `demo-1` branch at 12:00 noon on 09/23. This document is what your
 progress is graded against for the rest of the semester — see the
-[progress rubric](https://yigonghu.github.io/ec528/fall26/grading/#progress).*
+[progress rubric](https://ec528.github.io/ec528/fall26/grading/#progress).*
 
 ## 1. Problem
 
