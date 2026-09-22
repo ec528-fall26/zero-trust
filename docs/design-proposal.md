@@ -186,8 +186,6 @@ The dates below follow the supplied assignment. Scripts and reports are planned 
 
 By October 2, we will record an internal compatibility checkpoint covering MOC access/TPM support, the EMILIA approval interface, and Keylime payload support. If a blocker changes a committed milestone, we will record the proposed change and justification in the repository and announce it at the next demo, following the supplied progress rules. A local emulator does not silently replace the final MOC-or-similar demonstration.
 
-This proposal addresses the design and technical-challenge components of Demo 1. Slides remain a separate graded deliverable (25% in the supplied rubric); this file does not satisfy that requirement by itself.
-
 ## 6. Risks
 
 | Risk | Mitigation and decision |
