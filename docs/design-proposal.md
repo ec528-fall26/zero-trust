@@ -1,9 +1,5 @@
 # Design Proposal: Zero Trust Cryptographic Confinement for AI Agents
 
-**EC528 — Demo 1 | Proposed submission: `docs/design-proposal.md` on `demo-1` | Due September 23, 2026, at 12:00 noon**
-
-This is a proposed implementation and evaluation plan, not a report of completed work. Script names below are deliverables to be implemented. Numeric settings are prototype design choices, not measured results or requirements imposed by the sponsor.
-
 ## 1. Problem
 
 An AI agent with deployment credentials can turn mistaken or attacker-influenced instructions into real changes to infrastructure. The intended users of this prototype are cloud administrators and engineering teams that want agents to prepare and request workloads without giving those agents independent execution authority.
@@ -201,8 +197,6 @@ By October 2, we will record an internal compatibility checkpoint covering MOC a
 
 ## References
 
-Technical sources were consulted on September 22, 2026. These links describe dependencies; proposed integration behavior and test thresholds above are our design choices. The project brief, six-section template, dates, and grading excerpts supplied with the assignment are the source of course requirements. The linked course pages were not retrievable during this review, so no additional unpublished rubric requirements are assumed.
-
 1. [Nono — sandbox and credential-isolation overview](https://nono.sh/).
 2. [EMILIA Protocol — repository, Gate boundaries, and admission semantics](https://github.com/emiliaprotocol/emilia-protocol).
 3. [EMILIA — signature verification and independently supplied trust anchors](https://www.emiliaprotocol.ai/verify).
@@ -212,4 +206,3 @@ Technical sources were consulted on September 22, 2026. These links describe dep
 7. [Keylime — Verifier API v2.4](https://keylime.readthedocs.io/en/latest/rest_apis/2_4/verifier.html).
 8. [OpenStack Nova — Emulated Trusted Platform Module](https://docs.openstack.org/nova/latest/admin/emulated-tpm.html).
 9. [Mass Open Cloud Alliance](https://massopen.cloud/). Project access and TPM-enabled resources remain unverified.
-10. [EC528 Fall 2026 grading policy](https://ec528.github.io/ec528/fall26/grading/) and [proposal template](https://github.com/ec528-fall26/zero-trust/blob/main/docs/design-proposal.md), as reproduced in the assignment supplied for this proposal.
