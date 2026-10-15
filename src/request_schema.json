@@ -1,0 +1,4 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/ec528-fall26/zero-trust/tree/main/src/request_schema.json"
+}
