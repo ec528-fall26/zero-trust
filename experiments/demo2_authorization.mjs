@@ -23,6 +23,11 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const outputPath = path.resolve(
   process.argv[2] || path.join(repositoryRoot, 'results', 'demo2-authorization.json'),
 );
+const LIMITATIONS = Object.freeze([
+  'swtpm is not a hardware root of trust.',
+  'The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.',
+  'The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval.',
+]);
 
 function digest(bytes) {
   return `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
@@ -39,6 +44,15 @@ async function commandOutput(command, args) {
   } catch {
     return null;
   }
+}
+
+async function requiredCommandOutput(command, args) {
+  const { stdout } = await execFileAsync(command, args, {
+    cwd: repositoryRoot,
+    timeout: 30_000,
+    windowsHide: true,
+  });
+  return stdout.trim();
 }
 
 async function writeResult(result) {
@@ -166,20 +180,16 @@ async function main() {
     assert.throws(() => pendingController.approve('security'), /approval window expired/);
     scenarios.push({ name: 'one_signer_expiry', passed: true, observed: 'expired_without_execution' });
 
-    const gitStatus = await commandOutput('git', [
-      'status',
-      '--porcelain',
-      '--',
-      '.',
-      ':(exclude)results/**',
-    ]);
+    const gitStatus = await requiredCommandOutput(
+      'git', ['status', '--porcelain', '--untracked-files=all'],
+    );
     const result = {
       schema_version: 1,
       experiment: 'demo2-authorization',
       status: 'pass',
       generated_at: new Date().toISOString(),
-      repository_revision: await commandOutput('git', ['rev-parse', 'HEAD']),
-      repository_dirty: gitStatus === null ? null : gitStatus.length > 0,
+      repository_revision: await requiredCommandOutput('git', ['rev-parse', 'HEAD']),
+      repository_dirty: gitStatus.length > 0,
       versions: {
         nono: await commandOutput('nono', ['--version']),
         node: process.version,
@@ -188,10 +198,7 @@ async function main() {
       action,
       scenarios,
       verified_receipts: [verifiedReceipt],
-      limitations: [
-        'Approver credentials are generated independently for this deterministic integration experiment.',
-        'This experiment validates the Nono-to-EMILIA handoff and durable receipt gate; it does not claim live Keylime attestation.',
-      ],
+      limitations: [...LIMITATIONS],
     };
     await writeResult(result);
     process.stdout.write(`${outputPath}\n`);

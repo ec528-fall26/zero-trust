@@ -14,6 +14,11 @@ import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mj
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const LIMITATIONS = Object.freeze([
+  'swtpm is not a hardware root of trust.',
+  'The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.',
+  'The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval.',
+]);
 
 async function commandOutput(command, args) {
   try {
@@ -26,6 +31,15 @@ async function commandOutput(command, args) {
   } catch {
     return null;
   }
+}
+
+async function requiredCommandOutput(command, args) {
+  const { stdout } = await execFileAsync(command, args, {
+    cwd: repositoryRoot,
+    timeout: 30_000,
+    windowsHide: true,
+  });
+  return stdout.trim();
 }
 
 async function writeResult(outputPath, result) {
@@ -114,20 +128,16 @@ async function main() {
     );
   }
 
-  const gitStatus = await commandOutput('git', [
-    'status',
-    '--porcelain',
-    '--',
-    '.',
-    ':(exclude)results/**',
-  ]);
+  const gitStatus = await requiredCommandOutput(
+    'git', ['status', '--porcelain', '--untracked-files=all'],
+  );
   const result = {
     schema_version: 1,
     experiment: 'demo2-attestation',
     status: scenarios.every((scenario) => scenario.passed) ? 'pass' : 'fail',
     generated_at: new Date().toISOString(),
-    repository_revision: await commandOutput('git', ['rev-parse', 'HEAD']),
-    repository_dirty: gitStatus === null ? null : gitStatus.length > 0,
+    repository_revision: await requiredCommandOutput('git', ['rev-parse', 'HEAD']),
+    repository_dirty: gitStatus.length > 0,
     versions: {
       keylime: process.env.KEYLIME_VERSION || 'not-reported',
       nono: await commandOutput('nono', ['--version']),
@@ -135,9 +145,7 @@ async function main() {
     },
     action,
     scenarios,
-    limitations: process.env.KEYLIME_TPM_TYPE === 'swtpm'
-      ? ['swtpm proves the Keylime protocol flow but is not a hardware root of trust.']
-      : [],
+    limitations: [...LIMITATIONS],
   };
   await writeResult(outputPath, result);
   process.stdout.write(`${outputPath}\n`);
