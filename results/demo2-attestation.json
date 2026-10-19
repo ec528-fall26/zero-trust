@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-attestation",
+  "status": "pass",
+  "generated_at": "2026-10-19T15:47:33.599Z",
+  "repository_revision": "b015cdc256850627c1da46583fe7f46e89b30a44",
+  "repository_dirty": null,
+  "versions": {
+    "keylime": "7.14.1-5.el10_2.1",
+    "nono": "nono 0.79.0",
+    "tpm_type": "swtpm"
+  },
+  "action": {
+    "action_type": "workload.execute",
+    "operation": "checksum.sha256",
+    "target": "aws-keylime-demo-01",
+    "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
+    "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+    "occurrence_id": "3df75267-5281-4cc9-9b10-3c95fbf99dee",
+    "policy_version": "demo-2.1"
+  },
+  "scenarios": [
+    {
+      "name": "fresh_attestation_allows_exact_workload",
+      "passed": true,
+      "observed": "executed",
+      "evidence": {
+        "provider": "keylime",
+        "verdict": "trusted",
+        "target": "aws-keylime-demo-01",
+        "policy_version": "demo-2.1",
+        "occurrence_id": "3df75267-5281-4cc9-9b10-3c95fbf99dee",
+        "attested_at": "2026-10-19T15:47:26.000Z",
+        "evidence_digest": "sha256:4db746d6d6ccf20c055ed5d5c124439a466d64441b1093200020625771e7a07d"
+      },
+      "workload": {
+        "executed": true,
+        "operation": "checksum.sha256",
+        "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
+        "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+        "stdout": "da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03  /proc/self/fd/4"
+      }
+    },
+    {
+      "name": "mcp_target_binding",
+      "passed": true,
+      "observed": "denied"
+    },
+    {
+      "name": "keylime_unavailable_fails_closed",
+      "passed": true,
+      "observed": "denied"
+    }
+  ],
+  "limitations": [
+    "swtpm proves the Keylime protocol flow but is not a hardware root of trust."
+  ]
+}
