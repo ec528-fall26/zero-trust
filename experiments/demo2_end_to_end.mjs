@@ -390,10 +390,14 @@ async function main() {
       startedAt,
     ));
 
+    mark('keylime_agent_recovery_started', 'started');
     await runSsm([
-      'systemctl restart keylime_agent.service',
+      'systemctl stop keylime_agent.service',
+      'systemctl restart swtpm-keylime.service',
+      'sleep 2',
+      'systemctl start keylime_agent.service',
       'sleep 35',
-      'systemctl is-active keylime_agent.service',
+      'systemctl is-active swtpm-keylime.service keylime_agent.service',
     ], context);
     agentStopped = false;
     mark('keylime_agent_restarted', 'success');
@@ -485,10 +489,43 @@ async function main() {
     await writeResult(outputPath, result);
     process.stdout.write(`${outputPath}\n`);
     if (result.status !== 'pass') process.exitCode = 1;
+  } catch (error) {
+    let repositoryRevision = 'unavailable';
+    let repositoryDirty = true;
+    try {
+      repositoryRevision = await requiredCommand('git', ['rev-parse', 'HEAD']);
+      repositoryDirty = (await requiredCommand(
+        'git', ['status', '--porcelain', '--untracked-files=all'],
+      )).length > 0;
+    } catch {
+      // Preserve a conservative dirty value if Git itself is unavailable.
+    }
+    await writeResult(outputPath, {
+      schema_version: 1,
+      experiment: 'demo2-end-to-end',
+      status: 'fail',
+      generated_at: new Date().toISOString(),
+      repository_revision: repositoryRevision,
+      repository_dirty: repositoryDirty,
+      versions: { node: process.version },
+      tpm_type: 'swtpm',
+      failed_after: timeline.at(-1)?.step || 'initialization',
+      error: error instanceof Error ? error.message : 'unknown error',
+      scenarios,
+      timeline,
+      limitations: [...LIMITATIONS],
+    });
+    process.stderr.write(`demo2 end-to-end failed: ${error.message}\n`);
+    process.exitCode = 1;
   } finally {
     if (agentStopped && context) {
       try {
-        await runSsm(['systemctl restart keylime_agent.service'], context);
+        await runSsm([
+          'systemctl stop keylime_agent.service',
+          'systemctl restart swtpm-keylime.service',
+          'sleep 2',
+          'systemctl start keylime_agent.service',
+        ], context);
       } catch {
         process.stderr.write('warning: failed to restart Keylime agent during cleanup\n');
       }
@@ -498,18 +535,7 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
-  const outputPath = path.resolve(
-    process.argv[2] || path.join(repositoryRoot, 'results', 'demo2-end-to-end.json'),
-  );
-  await writeResult(outputPath, {
-    schema_version: 1,
-    experiment: 'demo2-end-to-end',
-    status: 'fail',
-    generated_at: new Date().toISOString(),
-    error: error instanceof Error ? error.message : 'unknown error',
-    limitations: [...LIMITATIONS],
-  });
+main().catch((error) => {
   process.stderr.write(`demo2 end-to-end failed: ${error.message}\n`);
   process.exitCode = 1;
 });
