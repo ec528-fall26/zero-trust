@@ -2,9 +2,9 @@
   "schema_version": 1,
   "experiment": "demo2-attestation",
   "status": "pass",
-  "generated_at": "2026-10-19T15:47:33.599Z",
-  "repository_revision": "b015cdc256850627c1da46583fe7f46e89b30a44",
-  "repository_dirty": null,
+  "generated_at": "2026-10-19T18:42:26.410Z",
+  "repository_revision": "7de165c7160dc276695b0532a8f4b4b3aed2a51f",
+  "repository_dirty": false,
   "versions": {
     "keylime": "7.14.1-5.el10_2.1",
     "nono": "nono 0.79.0",
@@ -30,8 +30,8 @@
         "target": "aws-keylime-demo-01",
         "policy_version": "demo-2.1",
         "occurrence_id": "3df75267-5281-4cc9-9b10-3c95fbf99dee",
-        "attested_at": "2026-10-19T15:47:26.000Z",
-        "evidence_digest": "sha256:4db746d6d6ccf20c055ed5d5c124439a466d64441b1093200020625771e7a07d"
+        "attested_at": "2026-10-19T18:42:25.000Z",
+        "evidence_digest": "sha256:c7654b5f0fb5803ba9680ff008b72972b8531c38f19bbd3687a8d05253e0d2b9"
       },
       "workload": {
         "executed": true,
@@ -53,6 +53,8 @@
     }
   ],
   "limitations": [
-    "swtpm proves the Keylime protocol flow but is not a hardware root of trust."
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.",
+    "The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval."
   ]
 }
