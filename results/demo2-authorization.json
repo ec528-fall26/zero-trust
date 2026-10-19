@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-authorization",
+  "status": "pass",
+  "generated_at": "2026-10-19T02:41:05.514Z",
+  "repository_revision": "3fc5c9aca3b01f1b649e241c80857e361033f2ed",
+  "repository_dirty": false,
+  "versions": {
+    "nono": "nono 0.79.0",
+    "node": "v24.11.0",
+    "emilia_require_receipt": "0.9.0"
+  },
+  "action": {
+    "action_type": "workload.execute",
+    "operation": "checksum.sha256",
+    "target": "aws-keylime-demo-01",
+    "artifact_sha256": "sha256:b709d16d3bf8093e4affb066a07ff3aa40495b8536dad695b71a7918e4357a12",
+    "input_sha256": "sha256:79716dd53d76cc2fd5ce87f8d212838714928da7c8f3f95e9dc6203066c6a4b3",
+    "occurrence_id": "e2d4026b-1bd0-4ee8-9d7e-cc0f359b71dd",
+    "policy_version": "demo-2.1"
+  },
+  "scenarios": [
+    {
+      "name": "missing_receipt",
+      "passed": true,
+      "observed": "refused"
+    },
+    {
+      "name": "one_signer_pending",
+      "passed": true,
+      "observed": "pending"
+    },
+    {
+      "name": "duplicate_signer",
+      "passed": true,
+      "observed": "not_counted_twice"
+    },
+    {
+      "name": "untrusted_signer",
+      "passed": true,
+      "observed": "refused"
+    },
+    {
+      "name": "two_distinct_signers",
+      "passed": true,
+      "observed": "receipt_issued"
+    },
+    {
+      "name": "receipt_target_binding",
+      "passed": true,
+      "observed": "action_hash_mismatch"
+    },
+    {
+      "name": "exact_action",
+      "passed": true,
+      "observed": "executed_once"
+    },
+    {
+      "name": "immediate_replay",
+      "passed": true,
+      "observed": "replay_refused"
+    },
+    {
+      "name": "replay_after_restart",
+      "passed": true,
+      "observed": "durably_unavailable"
+    },
+    {
+      "name": "expired_evidence",
+      "passed": true,
+      "observed": "receipt_expired"
+    },
+    {
+      "name": "one_signer_expiry",
+      "passed": true,
+      "observed": "expired_without_execution"
+    }
+  ],
+  "verified_receipts": [
+    {
+      "@version": "EP-RECEIPT-v1",
+      "payload": {
+        "receipt_id": "demo-e11bbfdf-dd72-4ce1-ac38-e578d5249403",
+        "subject": "agent:ec528-demo",
+        "created_at": "2026-10-19T02:41:05.462Z",
+        "claim": {
+          "action_type": "workload.execute",
+          "outcome": "allow_with_signoff",
+          "canonical_action": {
+            "action_type": "workload.execute",
+            "operation": "checksum.sha256",
+            "target": "aws-keylime-demo-01",
+            "artifact_sha256": "sha256:b709d16d3bf8093e4affb066a07ff3aa40495b8536dad695b71a7918e4357a12",
+            "input_sha256": "sha256:79716dd53d76cc2fd5ce87f8d212838714928da7c8f3f95e9dc6203066c6a4b3",
+            "occurrence_id": "e2d4026b-1bd0-4ee8-9d7e-cc0f359b71dd",
+            "policy_version": "demo-2.1"
+          },
+          "action_hash": "sha256:1d4065d8f2bb88f103fc72592a1b8bfb0bde2833c3315320af59c57b6e5d06d6",
+          "quorum": {
+            "threshold": 2,
+            "signers": [
+              "ep:approver:operator",
+              "ep:approver:security"
+            ]
+          }
+        },
+        "assurance_proof": {
+          "@version": "EP-ASSURANCE-PROOF-v1",
+          "context_hash": "sha256:81796d9df1cdcc9a09b1b922e331fecf80cae7a4ac48d8c4ae913777f1d4d27f",
+          "signoffs": [
+            {
+              "approver_key_id": "demo-operator-key",
+              "key_class": "A",
+              "webauthn": {
+                "authenticator_data": "EsoXtJryKJQ28wPgFmAwoh5SXSZuIJJnQzgBqP1AcaAFAAAAAQ",
+                "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ1hsdG5mSE56Sm9Kc2JraTR6SC16NERLNTZTc1NOakVycEUzZF9IVTBuOCIsIm9yaWdpbiI6Imh0dHA6Ly8xMjcuMC4wLjEiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+                "signature": "MEUCIQCDYnYI1xnivIx2DLT9RoIbdIYds-UIUojE2bbE7llKrwIgU8pHTEmkw5L7dv9jp0O4XrTwkRs_KF7b8B0AkZWpVE8"
+              }
+            },
+            {
+              "approver_key_id": "demo-security-key",
+              "key_class": "A",
+              "webauthn": {
+                "authenticator_data": "EsoXtJryKJQ28wPgFmAwoh5SXSZuIJJnQzgBqP1AcaAFAAAAAQ",
+                "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiZ1hsdG5mSE56Sm9Kc2JraTR6SC16NERLNTZTc1NOakVycEUzZF9IVTBuOCIsIm9yaWdpbiI6Imh0dHA6Ly8xMjcuMC4wLjEiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+                "signature": "MEUCIF34-6xfq1Y5ZdRs9TO2zgVeAaRe5fwmX8rF3tSemB7vAiEAleuQx8PyLp-Wc5DJ85_AjsRFOJRwGTMvYYm1KC9Gzpc"
+              }
+            }
+          ]
+        }
+      },
+      "signature": {
+        "algorithm": "Ed25519",
+        "value": "qfCGSw3i_WF8L6te7UZpdDHnVdaLHvwiEJKhCOJICgZc86H-NduYFBfxEsd_tlPKrxpJj0hq82CHRRuvDu14Ag"
+      }
+    }
+  ],
+  "limitations": [
+    "Approver credentials are generated independently for this deterministic integration experiment.",
+    "This experiment validates the Nono-to-EMILIA handoff and durable receipt gate; it does not claim live Keylime attestation."
+  ]
+}
