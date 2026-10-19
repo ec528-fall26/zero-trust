@@ -202,11 +202,27 @@ Resources:
           temporary=\$(mktemp)
           trap 'rm -f "\$temporary"' EXIT HUP INT TERM
           /usr/bin/keylime_tenant -c cvstatus -u '$agent_uuid' > "\$temporary"
-          /usr/bin/python3 -c '
+          /usr/bin/python3 -I -c '
           import json
           import sys
           agent_id, source = sys.argv[1:]
-          status = json.load(open(source, encoding="utf-8"))
+          text = open(source, encoding="utf-8").read()
+          # keylime_tenant may print log lines around the JSON document.  Accept
+          # the whole output or exactly one line that parses as a JSON object.
+          try:
+              candidates = [json.loads(text)]
+          except ValueError:
+              candidates = []
+              for line in text.splitlines():
+                  line = line.strip()
+                  if line.startswith("{"):
+                      try:
+                          candidates.append(json.loads(line))
+                      except ValueError:
+                          pass
+          if len(candidates) != 1 or not isinstance(candidates[0], dict):
+              raise SystemExit("unexpected Keylime status output")
+          status = candidates[0]
           if agent_id not in status or len(status) != 1:
               raise SystemExit("unexpected Keylime status shape")
           print(json.dumps({"agent_id": agent_id, "results": status[agent_id]}, separators=(",", ":")))

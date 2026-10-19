@@ -75,6 +75,7 @@ async function main() {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('invalid port');
   const handler = createAttestAndDeploy({
     statusCommand: process.env.KEYLIME_STATUS_COMMAND,
+    statusSocket: process.env.KEYLIME_STATUS_SOCKET,
     artifactPath: process.env.KEYLIME_WORKLOAD_ARTIFACT,
     inputPath: process.env.KEYLIME_WORKLOAD_INPUT,
     target: process.env.KEYLIME_TARGET,

@@ -127,30 +127,44 @@ const commands = [
   `printf %s ${JSON.stringify(payload)} | base64 --decode | tar -xzf - -C /opt/ec528-zero-trust`,
   "bash /opt/ec528-zero-trust/infra/aws/install-mcp.sh d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
 ];
-process.stdout.write(JSON.stringify({ commands }));
+process.stdout.write(JSON.stringify({ commands, executionTimeout: ["900"] }));
 ')
 command_id=$(run_aws ssm send-command \
   --profile "$profile" \
   --region "$region" \
   --instance-ids "$instance_id" \
   --document-name AWS-RunShellScript \
+  --timeout-seconds 600 \
   --parameters "$parameters" \
   --query 'Command.CommandId' \
   --output text)
-run_aws ssm wait command-executed \
-  --profile "$profile" \
-  --region "$region" \
-  --command-id "$command_id" \
-  --instance-id "$instance_id"
-installation_status=$(run_aws ssm get-command-invocation \
-  --profile "$profile" \
-  --region "$region" \
-  --command-id "$command_id" \
-  --instance-id "$instance_id" \
-  --query Status \
-  --output text)
+
+# `aws ssm wait command-executed` gives up after about 100 seconds, but the
+# install waits up to 10 minutes for the Keylime bootstrap.  Poll until the
+# invocation reaches a terminal status, for up to 15 minutes.
+installation_status=Pending
+for _attempt in $(seq 1 90); do
+  installation_status=$(run_aws ssm get-command-invocation \
+    --profile "$profile" \
+    --region "$region" \
+    --command-id "$command_id" \
+    --instance-id "$instance_id" \
+    --query Status \
+    --output text 2>/dev/null || echo Pending)
+  case "$installation_status" in
+    Success|Failed|TimedOut|Cancelled|Cancelling) break ;;
+  esac
+  sleep 10
+done
 [ "$installation_status" = "Success" ] || {
-  echo "MCP installation failed: $installation_status" >&2
+  echo "MCP installation did not succeed: $installation_status" >&2
+  run_aws ssm get-command-invocation \
+    --profile "$profile" \
+    --region "$region" \
+    --command-id "$command_id" \
+    --instance-id "$instance_id" \
+    --query StandardErrorContent \
+    --output text >&2 || true
   exit 70
 }
 

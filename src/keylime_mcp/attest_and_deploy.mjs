@@ -1,9 +1,8 @@
 import crypto from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { open } from 'node:fs/promises';
-import { promisify } from 'node:util';
+import net from 'node:net';
 
-const execFileAsync = promisify(execFile);
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -31,6 +30,95 @@ async function openVerifiedProtectedFile(filePath, approvedDigest, executable, r
     await handle.close();
     throw error;
   }
+}
+
+// Run a command without a shell and collect bounded output.  Unlike execFile,
+// spawn honours the `stdio` array, which is how verified descriptors reach the
+// child as fds 3 and 4.  Any non-zero exit, signal, timeout, or oversized
+// output is a failure.
+export function runCommand(file, args, options = {}) {
+  const {
+    timeout = 15_000,
+    maxBuffer = 64 * 1024,
+    stdio = ['ignore', 'pipe', 'pipe'],
+  } = options;
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      // detached puts the child in its own process group so a timeout can
+      // kill anything it forked, not just the direct child.
+      child = spawn(file, args, { shell: false, windowsHide: true, stdio, detached: true });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    const chunks = { stdout: [], stderr: [] };
+    let received = 0;
+    let failure = null;
+    const fail = (error) => {
+      if (failure) return;
+      failure = error;
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        child.kill('SIGKILL');
+      }
+    };
+    const timer = setTimeout(() => fail(new Error('command timed out')), timeout);
+    for (const stream of ['stdout', 'stderr']) {
+      child[stream].on('data', (chunk) => {
+        received += chunk.length;
+        if (received > maxBuffer) {
+          fail(new Error('command output exceeded the bound'));
+          return;
+        }
+        chunks[stream].push(chunk);
+      });
+    }
+    child.once('error', fail);
+    child.once('close', (code, signal) => {
+      clearTimeout(timer);
+      if (failure) {
+        reject(failure);
+      } else if (code !== 0 || signal !== null) {
+        reject(new Error(`command exited unsuccessfully (${signal ?? code})`));
+      } else {
+        resolve({
+          stdout: Buffer.concat(chunks.stdout).toString('utf8'),
+          stderr: Buffer.concat(chunks.stderr).toString('utf8'),
+        });
+      }
+    });
+  });
+}
+
+// Read the root-owned status helper through its systemd socket.  The helper
+// writes one JSON document and closes the connection.
+export function readStatusSocket(socketPath, { timeout = 15_000, maxBytes = 256 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let received = 0;
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const socket = net.createConnection({ path: socketPath });
+    socket.setTimeout(timeout, () => finish(new Error('Keylime status socket timed out')));
+    socket.on('data', (chunk) => {
+      received += chunk.length;
+      if (received > maxBytes) {
+        finish(new Error('Keylime status exceeded the response bound'));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    socket.once('error', (error) => finish(error));
+    socket.once('end', () => finish(null, { stdout: Buffer.concat(chunks).toString('utf8') }));
+  });
 }
 
 function singleJsonObject(stdout) {
@@ -96,6 +184,7 @@ function parseTenantStatus(stdout, expectedAgentId) {
 export function createAttestAndDeploy(options) {
   const {
     statusCommand,
+    statusSocket,
     artifactPath,
     inputPath,
     target,
@@ -104,9 +193,12 @@ export function createAttestAndDeploy(options) {
     maximumAttestationAgeSeconds = 30,
     requiredOwnerUid = 0,
     now = () => Date.now(),
-    commandRunner = execFileAsync,
+    commandRunner = runCommand,
   } = options;
-  if (!statusCommand || !artifactPath || !inputPath || !target || !agentId || !policyVersion) {
+  if (Boolean(statusCommand) === Boolean(statusSocket)) {
+    throw new TypeError('configure exactly one of statusCommand or statusSocket');
+  }
+  if (!artifactPath || !inputPath || !target || !agentId || !policyVersion) {
     throw new TypeError('Keylime MCP server configuration is incomplete');
   }
 
@@ -120,12 +212,12 @@ export function createAttestAndDeploy(options) {
         || !UUID_PATTERN.test(action.occurrence_id)) {
       throw new Error('action does not match the Keylime MCP policy');
     }
-    const { stdout } = await commandRunner(statusCommand, [], {
-      timeout: 15_000,
-      maxBuffer: 256 * 1024,
-      shell: false,
-      windowsHide: true,
-    });
+    const { stdout } = statusSocket
+      ? await readStatusSocket(statusSocket)
+      : await commandRunner(statusCommand, [], {
+        timeout: 15_000,
+        maxBuffer: 256 * 1024,
+      });
     const { results, attestedAt } = parseTenantStatus(stdout, agentId);
     const current = now();
     if (attestedAt.getTime() > current + 5_000
@@ -152,7 +244,7 @@ export function createAttestAndDeploy(options) {
     }
     let execution;
     try {
-      if (process.platform !== 'linux' && commandRunner === execFileAsync) {
+      if (process.platform !== 'linux' && commandRunner === runCommand) {
         throw new Error('descriptor-bound workload execution requires Linux');
       }
       // Duplicate the already-verified descriptors into fixed child FDs.  The
@@ -161,8 +253,6 @@ export function createAttestAndDeploy(options) {
       execution = await commandRunner('/proc/self/fd/3', ['/proc/self/fd/4'], {
         timeout: 15_000,
         maxBuffer: 64 * 1024,
-        shell: false,
-        windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe', artifactHandle.fd, inputHandle.fd],
       });
     } finally {
