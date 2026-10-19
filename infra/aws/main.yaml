@@ -124,6 +124,7 @@ Resources:
             nodejs \
             npm \
             openssl \
+            policycoreutils-devel \
             python3 \
             swtpm \
             swtpm-tools \
@@ -138,6 +139,39 @@ Resources:
               --create-platform-cert \
               --lock-nvram
           fi
+
+          # AlmaLinux confines swtpm for libvirt, but its packaged policy does
+          # not permit a custom systemd service to enter the swtpm_t domain.
+          # Add only that executable-to-domain transition; do not weaken or
+          # disable SELinux for the rest of the host.
+          cat > /tmp/ec528_swtpm.te <<'POLICY'
+          policy_module(ec528_swtpm, 1.0)
+
+          gen_require(`
+              type init_t;
+              type keylime_agent_t;
+              type swtpm_exec_t;
+              type swtpm_t;
+          ')
+
+          type ec528_swtpm_port_t;
+          corenet_port(ec528_swtpm_port_t)
+          type ec528_swtpm_state_t;
+          files_type(ec528_swtpm_state_t)
+
+          domain_auto_transition_pattern(init_t, swtpm_exec_t, swtpm_t)
+          allow keylime_agent_t ec528_swtpm_port_t:tcp_socket name_connect;
+          allow swtpm_t ec528_swtpm_port_t:tcp_socket name_bind;
+          allow swtpm_t self:tcp_socket { listen accept };
+          manage_dirs_pattern(swtpm_t, ec528_swtpm_state_t, ec528_swtpm_state_t)
+          manage_files_pattern(swtpm_t, ec528_swtpm_state_t, ec528_swtpm_state_t)
+          POLICY
+          make -C /tmp -f /usr/share/selinux/devel/Makefile ec528_swtpm.pp
+          semodule -i /tmp/ec528_swtpm.pp
+          semanage port -a -t ec528_swtpm_port_t -p tcp 2321-2322
+          semanage fcontext -a -t ec528_swtpm_state_t '/var/lib/swtpm/keylime(/.*)?'
+          restorecon -R /var/lib/swtpm/keylime
+          rm -f /tmp/ec528_swtpm.te /tmp/ec528_swtpm.mod /tmp/ec528_swtpm.pp
 
           cat > /etc/systemd/system/swtpm-keylime.service <<'UNIT'
           [Unit]
