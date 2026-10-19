@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "set -eu",
+    "test \"$(cat /var/lib/ec528-bootstrap-result)\" = ready",
+    "artifact=$(sha256sum /opt/ec528/workloads/checksum.sh | cut -d' ' -f1)",
+    "input=$(sha256sum /opt/ec528/inputs/demo-payload.txt | cut -d' ' -f1)",
+    "occurrence=$(cat /proc/sys/kernel/random/uuid)",
+    "printf '{\"action_type\":\"workload.execute\",\"operation\":\"checksum.sha256\",\"target\":\"aws-keylime-demo-01\",\"artifact_sha256\":\"sha256:%s\",\"input_sha256\":\"sha256:%s\",\"occurrence_id\":\"%s\",\"policy_version\":\"demo-2.1\"}\\n' \"$artifact\" \"$input\" \"$occurrence\""
+  ]
+}

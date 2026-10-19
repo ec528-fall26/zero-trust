@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EC528 Zero-Trust Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #17202a; }
+    h1 { margin-bottom: .25rem; }
+    .warning { background: #fff4ce; border: 1px solid #d6b656; padding: .8rem; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; margin: 1.2rem 0; }
+    .stage { border: 1px solid #aeb6bf; padding: .8rem; min-height: 5rem; }
+    .ok { border-color: #198754; background: #effaf3; }
+    button { padding: .55rem .8rem; margin: .2rem; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+    pre { background: #f4f6f7; padding: .8rem; overflow: auto; max-height: 22rem; }
+    code { overflow-wrap: anywhere; }
+    @media (max-width: 700px) { .flow { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Zero-Trust Workload Demo</h1>
+  <p>Nono → EMILIA receipt → Keylime attestation → workload</p>
+  <p class="warning"><strong>Demo boundary:</strong> receipt verification and replay protection are real. Human signing keys and Keylime are local stand-ins until the team services are connected.</p>
+
+  <div class="flow">
+    <div class="stage ok"><strong>1. Nono</strong><p>Restricted request ingested.</p></div>
+    <div class="stage" id="emilia"><strong>2. EMILIA</strong><p id="approval-status">0 / 2 approvals</p></div>
+    <div class="stage" id="guard"><strong>3. Receipt guard</strong><p id="receipt-status">Receipt not issued</p></div>
+    <div class="stage" id="keylime"><strong>4. Keylime</strong><p id="execution-status">Not executed</p></div>
+  </div>
+
+  <h2>Approval</h2>
+  <button data-approve="operator">Approve as operator</button>
+  <button data-approve="security">Approve as security</button>
+  <button data-approve="reviewer">Approve as reviewer</button>
+
+  <h2>Security checks</h2>
+  <button data-execute="missing">Try without receipt</button>
+  <button data-execute="tampered" disabled>Try altered target</button>
+  <button data-execute="approved" disabled>Run approved workload</button>
+  <button data-execute="replay" disabled>Replay receipt</button>
+
+  <h2>Exact approved action</h2>
+  <pre id="action"></pre>
+  <h2>Latest result</h2>
+  <pre id="result">No request yet.</pre>
+  <h2>Audit events</h2>
+  <pre id="events"></pre>
+
+  <script>
+    async function call(path, body) {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error || 'request failed');
+      render(value);
+    }
+
+    function render(state) {
+      document.querySelector('#approval-status').textContent = `${state.approvals.length} / ${state.required_approvals} approvals`;
+      document.querySelector('#receipt-status').textContent = state.receipt_ready ? `Receipt ready: ${state.receipt_id}` : 'Receipt not issued';
+      document.querySelector('#action').textContent = JSON.stringify({ ...state.action, action_hash: state.action_hash }, null, 2);
+      document.querySelector('#result').textContent = state.last_response ? JSON.stringify(state.last_response, null, 2) : 'No request yet.';
+      document.querySelector('#events').textContent = JSON.stringify(state.events, null, 2);
+      document.querySelector('#emilia').classList.toggle('ok', state.approvals.length >= 2);
+      document.querySelector('#guard').classList.toggle('ok', state.receipt_ready);
+      document.querySelector('#keylime').classList.toggle('ok', state.last_response?.status === 200);
+      document.querySelector('#execution-status').textContent = state.last_response?.status === 200 ? `Attested and executed once (${state.keylime_mode})` : `Not executed (${state.keylime_mode})`;
+      for (const button of document.querySelectorAll('[data-execute]')) {
+        if (button.dataset.execute !== 'missing') button.disabled = !state.receipt_ready;
+      }
+      for (const button of document.querySelectorAll('[data-approve]')) {
+        button.disabled = state.approvals.includes(button.dataset.approve);
+      }
+    }
+
+    for (const button of document.querySelectorAll('[data-approve]')) {
+      button.addEventListener('click', () => call('/api/approve', { role: button.dataset.approve }).catch(alert));
+    }
+    for (const button of document.querySelectorAll('[data-execute]')) {
+      button.addEventListener('click', () => call('/api/execute', { mode: button.dataset.execute }).catch(alert));
+    }
+    fetch('/api/state').then((response) => response.json()).then(render).catch(alert);
+  </script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC528 Keylime development node with no inbound network access.
+
+Parameters:
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0281f4b4279b17b5b
+    Description: Pinned official AlmaLinux OS 10 x86_64 AMI in us-east-2.
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  InstanceProfileName:
+    Type: String
+    Default: EC528ZeroTrustInstanceProfile
+  AgentUuid:
+    Type: String
+    Default: d432fbb3-d2f1-4a97-9ef7-75bd81c00000
+    AllowedPattern: '[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}'
+  GitCommitSha:
+    Type: String
+    AllowedPattern: '[a-f0-9]{40}'
+  AutoTerminateMinutes:
+    Type: Number
+    Default: 240
+    MinValue: 60
+    MaxValue: 720
+
+Resources:
+  KeylimeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EC528 Keylime node with outbound bootstrap access only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for packages, GitHub, and Systems Manager
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP package mirror fallback
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS response fallback
+        - IpProtocol: udp
+          FromPort: 123
+          ToPort: 123
+          CidrIp: 0.0.0.0/0
+          Description: Clock synchronization for freshness decisions
+      Tags:
+        - Key: Name
+          Value: ec528-zero-trust-keylime
+        - Key: Project
+          Value: ec528-zero-trust
+
+  KeylimeNode:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfileName
+      InstanceInitiatedShutdownBehavior: terminate
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: enabled
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref KeylimeSecurityGroup
+          SubnetId: !Ref SubnetId
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 16
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: ec528-zero-trust-keylime
+        - Key: Project
+          Value: ec528-zero-trust
+        - Key: AutoTerminate
+          Value: !Sub '${AutoTerminateMinutes}m'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec > >(tee -a /var/log/ec528-bootstrap.log) 2>&1
+
+          systemd-run \
+            --unit=ec528-auto-terminate \
+            --on-active=${AutoTerminateMinutes}m \
+            /usr/bin/systemctl poweroff
+
+          dnf install -y \
+            git \
+            keylime \
+            keylime-agent-rust \
+            nodejs \
+            npm \
+            openssl \
+            python3 \
+            swtpm \
+            swtpm-tools \
+            tpm2-tools
+
+          install -d -o tss -g tss -m 0700 /var/lib/swtpm/keylime
+          if [ ! -f /var/lib/swtpm/keylime/tpm2-00.permall ]; then
+            sudo -u tss swtpm_setup \
+              --tpm2 \
+              --tpmstate /var/lib/swtpm/keylime \
+              --create-ek-cert \
+              --create-platform-cert \
+              --lock-nvram
+          fi
+
+          cat > /etc/systemd/system/swtpm-keylime.service <<'UNIT'
+          [Unit]
+          Description=Software TPM for EC528 Keylime development
+          Before=keylime_agent.service
+
+          [Service]
+          User=tss
+          Group=tss
+          ExecStart=/usr/bin/swtpm socket --tpm2 --tpmstate dir=/var/lib/swtpm/keylime --server type=tcp,port=2321,bindaddr=127.0.0.1 --ctrl type=tcp,port=2322,bindaddr=127.0.0.1 --flags not-need-init,startup-clear
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+
+          install -d -m 0755 /etc/systemd/system/keylime_agent.service.d
+          cat > /etc/systemd/system/keylime_agent.service.d/10-swtpm.conf <<'UNIT'
+          [Unit]
+          Requires=swtpm-keylime.service
+          After=swtpm-keylime.service keylime_registrar.service
+
+          [Service]
+          Environment="TCTI=swtpm:host=127.0.0.1,port=2321"
+          UNIT
+
+          cp \
+            /var/lib/swtpm-localca/swtpm-localca-rootca-cert.pem \
+            /var/lib/swtpm-localca/issuercert.pem \
+            /var/lib/keylime/tpm_cert_store/
+
+          install -d -o root -g root -m 0755 /opt/ec528/workloads /opt/ec528/inputs
+          cat > /opt/ec528/workloads/checksum.sh <<'WORKLOAD'
+          #!/bin/sh
+          set -eu
+          [ "$#" -eq 1 ] || exit 64
+          exec sha256sum "$1"
+          WORKLOAD
+          printf '%s\n' 'EC528 approved workload payload' > /opt/ec528/inputs/demo-payload.txt
+          chown -R root:root /opt/ec528
+          chmod 0755 /opt/ec528/workloads/checksum.sh
+          chmod 0644 /opt/ec528/inputs/demo-payload.txt
+
+          systemctl daemon-reload
+          systemctl enable --now swtpm-keylime
+          systemctl enable --now keylime_verifier
+          sleep 3
+          systemctl enable --now keylime_registrar
+          sleep 3
+          systemctl enable --now keylime_agent
+          sleep 5
+
+          agent_uuid='${AgentUuid}'
+          if ! keylime_tenant -c cvstatus -u "$agent_uuid" >/dev/null 2>&1; then
+            keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1
+            sleep 5
+          fi
+
+          cat > /usr/local/libexec/ec528-keylime-status <<STATUS
+          #!/bin/sh
+          set -eu
+          temporary=\$(mktemp)
+          trap 'rm -f "\$temporary"' EXIT HUP INT TERM
+          /usr/bin/keylime_tenant -c cvstatus -u '$agent_uuid' > "\$temporary"
+          /usr/bin/python3 -c '
+          import json
+          import sys
+          agent_id, source = sys.argv[1:]
+          status = json.load(open(source, encoding="utf-8"))
+          if agent_id not in status or len(status) != 1:
+              raise SystemExit("unexpected Keylime status shape")
+          print(json.dumps({"agent_id": agent_id, "results": status[agent_id]}, separators=(",", ":")))
+          ' '$agent_uuid' "\$temporary"
+          STATUS
+          chmod 0755 /usr/local/libexec/ec528-keylime-status
+
+          git clone https://github.com/ec528-fall26/zero-trust.git /opt/ec528-zero-trust
+          cd /opt/ec528-zero-trust
+          git checkout --detach '${GitCommitSha}'
+          npm ci --omit=dev --ignore-scripts
+          chown -R root:root /opt/ec528-zero-trust
+          chmod -R go-w /opt/ec528-zero-trust
+
+          id ec528-mcp >/dev/null 2>&1 || \
+            useradd --system --home-dir /nonexistent --shell /sbin/nologin ec528-mcp
+          umask 077
+          openssl rand -hex 32 > /etc/ec528-keylime-mcp-token
+          chown root:ec528-mcp /etc/ec528-keylime-mcp-token
+          chmod 0640 /etc/ec528-keylime-mcp-token
+
+          cat > /usr/local/bin/ec528-keylime-status-sudo <<'SCRIPT'
+          #!/bin/sh
+          set -eu
+          exec sudo /usr/local/libexec/ec528-keylime-status
+          SCRIPT
+          chmod 0755 /usr/local/bin/ec528-keylime-status-sudo
+          printf '%s\n' \
+            'ec528-mcp ALL=(root) NOPASSWD: /usr/local/libexec/ec528-keylime-status' \
+            > /etc/sudoers.d/ec528-keylime-mcp
+          chmod 0440 /etc/sudoers.d/ec528-keylime-mcp
+
+          cat > /etc/systemd/system/ec528-keylime-mcp.service <<SERVICE
+          [Unit]
+          Description=EC528 Keylime MCP backend
+          After=network-online.target keylime_verifier.service keylime_agent.service
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=ec528-mcp
+          Group=ec528-mcp
+          Environment=KEYLIME_MCP_TOKEN_FILE=/etc/ec528-keylime-mcp-token
+          Environment=KEYLIME_STATUS_COMMAND=/usr/local/bin/ec528-keylime-status-sudo
+          Environment=KEYLIME_WORKLOAD_ARTIFACT=/opt/ec528/workloads/checksum.sh
+          Environment=KEYLIME_WORKLOAD_INPUT=/opt/ec528/inputs/demo-payload.txt
+          Environment=KEYLIME_TARGET=aws-keylime-demo-01
+          Environment=KEYLIME_AGENT_ID=$agent_uuid
+          Environment=KEYLIME_POLICY_VERSION=demo-2.1
+          Environment=KEYLIME_MAX_ATTESTATION_AGE_SECONDS=30
+          ExecStart=/usr/bin/node /opt/ec528-zero-trust/src/keylime_mcp/server.mjs
+          Restart=on-failure
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=strict
+          ProtectHome=true
+          ProtectKernelTunables=true
+          ProtectKernelModules=true
+          ProtectControlGroups=true
+          RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          systemctl daemon-reload
+          systemctl enable --now ec528-keylime-mcp
+          curl --fail --silent http://127.0.0.1:3000/healthz
+          printf '%s\n' ready > /var/lib/ec528-bootstrap-result
+
+Outputs:
+  InstanceId:
+    Value: !Ref KeylimeNode
+  SecurityGroupId:
+    Value: !Ref KeylimeSecurityGroup
+  TpmType:
+    Value: swtpm-development-only

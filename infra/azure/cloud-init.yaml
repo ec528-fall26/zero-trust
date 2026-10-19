@@ -1,0 +1,54 @@
+#cloud-config
+package_update: true
+packages:
+  - keylime
+  - keylime-agent-rust
+  - nodejs
+  - npm
+  - tpm2-tools
+
+write_files:
+  - path: /opt/ec528/workloads/checksum.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      set -eu
+
+      if [ "$#" -ne 1 ]; then
+        echo "usage: checksum.sh INPUT" >&2
+        exit 64
+      fi
+
+      if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1"
+      else
+        shasum -a 256 "$1"
+      fi
+  - path: /opt/ec528/inputs/demo-payload.txt
+    owner: root:root
+    permissions: '0644'
+    content: |
+      EC528 approved workload payload
+  - path: /usr/local/libexec/ec528-keylime-status
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      set -eu
+      exec /usr/bin/keylime_tenant -c cvstatus -u __AGENT_UUID__
+
+runcmd:
+  - [sh, -c, 'test -c /dev/tpmrm0 || test -c /dev/tpm0']
+  - [sh, -c, 'tpm2_getcap properties-fixed > /var/log/ec528-vtpm-properties.log']
+  - [systemctl, enable, --now, keylime_verifier]
+  - [sh, -c, 'sleep 3']
+  - [systemctl, enable, --now, keylime_registrar]
+  - [sh, -c, 'sleep 3']
+  - [systemctl, enable, --now, keylime_agent]
+  - [sh, -c, 'sleep 5']
+  - [sh, -c, 'keylime_tenant -c cvstatus -u __AGENT_UUID__ >/dev/null 2>&1 || keylime_tenant -c add -u __AGENT_UUID__ -t 127.0.0.1 -v 127.0.0.1']
+  - [sh, -c, 'sleep 5']
+  - [sh, -c, '/usr/local/libexec/ec528-keylime-status > /var/log/ec528-keylime-status.json']
+
+final_message: 'EC528 Azure Trusted Launch Keylime bootstrap completed.'

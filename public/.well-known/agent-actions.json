@@ -1,0 +1,61 @@
+{
+  "@version": "EP-ACTION-RISK-MANIFEST-v0.1",
+  "service": {
+    "name": "EC528 zero-trust workload controller",
+    "manifest_url": "https://controller.example.invalid/.well-known/agent-actions.json"
+  },
+  "receipt_required": {
+    "status": 428,
+    "challenge_header": "Receipt-Required",
+    "proof_header": "X-EMILIA-Receipt",
+    "receipt_profile": "EP-RECEIPT-v1"
+  },
+  "defaults": {
+    "read_only": "allow",
+    "missing_receipt": "refuse",
+    "invalid_receipt": "refuse",
+    "stale_receipt": "refuse"
+  },
+  "actions": [
+    {
+      "id": "mcp.execute_approved_workload",
+      "match": {
+        "protocol": "mcp",
+        "tool": "execute_approved_workload"
+      },
+      "action_type": "workload.execute",
+      "risk": "critical",
+      "receipt_required": true,
+      "assurance_class": "quorum",
+      "max_age_sec": 900,
+      "execution_binding": {
+        "required_fields": [
+          "action_type",
+          "operation",
+          "target",
+          "artifact_sha256",
+          "input_sha256",
+          "occurrence_id",
+          "policy_version"
+        ]
+      },
+      "quorum": {
+        "required": true,
+        "mode": "m_of_n",
+        "m": 2,
+        "distinct_humans": true
+      }
+    },
+    {
+      "id": "mcp.get_request_status",
+      "match": {
+        "protocol": "mcp",
+        "tool": "get_request_status"
+      },
+      "action_type": "workload.status.read",
+      "risk": "low",
+      "receipt_required": false,
+      "assurance_class": "software"
+    }
+  ]
+}
