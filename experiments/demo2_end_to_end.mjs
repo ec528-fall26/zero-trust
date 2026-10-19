@@ -124,6 +124,20 @@ async function runSsm(commands, context) {
   throw new Error('SSM command did not finish before its deadline');
 }
 
+function keylimeRecoveryCommands(agentUuid, waitSeconds = 15) {
+  return [
+    'systemctl stop keylime_agent.service',
+    'systemctl restart swtpm-keylime.service',
+    'sleep 2',
+    'systemctl start keylime_agent.service',
+    'sleep 5',
+    `keylime_tenant -c delete -u ${agentUuid}`,
+    `keylime_tenant -c add -u ${agentUuid} -t 127.0.0.1 -v 127.0.0.1`,
+    `sleep ${waitSeconds}`,
+    'systemctl is-active swtpm-keylime.service keylime_agent.service',
+  ];
+}
+
 async function waitForHealth(url, tunnel) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -391,14 +405,7 @@ async function main() {
     ));
 
     mark('keylime_agent_recovery_started', 'started');
-    await runSsm([
-      'systemctl stop keylime_agent.service',
-      'systemctl restart swtpm-keylime.service',
-      'sleep 2',
-      'systemctl start keylime_agent.service',
-      'sleep 35',
-      'systemctl is-active swtpm-keylime.service keylime_agent.service',
-    ], context);
+    await runSsm(keylimeRecoveryCommands(agentUuid), context);
     agentStopped = false;
     mark('keylime_agent_restarted', 'success');
 
@@ -520,12 +527,7 @@ async function main() {
   } finally {
     if (agentStopped && context) {
       try {
-        await runSsm([
-          'systemctl stop keylime_agent.service',
-          'systemctl restart swtpm-keylime.service',
-          'sleep 2',
-          'systemctl start keylime_agent.service',
-        ], context);
+        await runSsm(keylimeRecoveryCommands(agentUuid, 5), context);
       } catch {
         process.stderr.write('warning: failed to restart Keylime agent during cleanup\n');
       }
