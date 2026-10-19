@@ -392,7 +392,7 @@ async function main() {
 
     await runSsm([
       'systemctl restart keylime_agent.service',
-      'sleep 20',
+      'sleep 35',
       'systemctl is-active keylime_agent.service',
     ], context);
     agentStopped = false;
