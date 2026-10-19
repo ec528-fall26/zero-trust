@@ -78,11 +78,6 @@ if [ -n "$(git -C "$repository" status --porcelain)" ]; then
   echo "refusing deployment: the working tree contains code not present in the pinned commit" >&2
   exit 65
 fi
-if ! git -C "$repository" ls-remote origin | grep -q "$commit_sha"; then
-  echo "refusing deployment: the pinned commit is not available from origin" >&2
-  exit 65
-fi
-
 run_aws cloudformation deploy \
   --profile "$profile" \
   --region "$region" \
@@ -91,8 +86,73 @@ run_aws cloudformation deploy \
   --parameter-overrides \
     VpcId="$vpc_id" \
     SubnetId="$subnet_id" \
-    GitCommitSha="$commit_sha" \
+    SourceRevision="$commit_sha" \
   --tags Project=ec528-zero-trust
+
+instance_id=$(run_aws cloudformation describe-stacks \
+  --profile "$profile" \
+  --region "$region" \
+  --stack-name "$stack_name" \
+  --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue | [0]" \
+  --output text)
+
+for _attempt in $(seq 1 60); do
+  ping_status=$(run_aws ssm describe-instance-information \
+    --profile "$profile" \
+    --region "$region" \
+    --filters Key=InstanceIds,Values="$instance_id" \
+    --query 'InstanceInformationList[0].PingStatus' \
+    --output text)
+  [ "$ping_status" = "Online" ] && break
+  sleep 10
+done
+[ "${ping_status:-}" = "Online" ] || {
+  echo "instance did not become available in Systems Manager" >&2
+  exit 75
+}
+
+bundle=$(mktemp /tmp/ec528-mcp-bundle.XXXXXX)
+trap 'rm -f "$bundle"' EXIT HUP INT TERM
+tar -C "$repository" -czf "$bundle" \
+  package.json \
+  package-lock.json \
+  src/keylime_mcp \
+  infra/aws/install-mcp.sh
+bundle_base64=$(base64 < "$bundle" | tr -d '\n')
+parameters=$(BUNDLE_BASE64="$bundle_base64" node -e '
+const payload = process.env.BUNDLE_BASE64;
+const commands = [
+  "set -eu",
+  "install -d -o root -g root -m 0755 /opt/ec528-zero-trust",
+  `printf %s ${JSON.stringify(payload)} | base64 --decode | tar -xzf - -C /opt/ec528-zero-trust`,
+  "bash /opt/ec528-zero-trust/infra/aws/install-mcp.sh d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
+];
+process.stdout.write(JSON.stringify({ commands }));
+')
+command_id=$(run_aws ssm send-command \
+  --profile "$profile" \
+  --region "$region" \
+  --instance-ids "$instance_id" \
+  --document-name AWS-RunShellScript \
+  --parameters "$parameters" \
+  --query 'Command.CommandId' \
+  --output text)
+run_aws ssm wait command-executed \
+  --profile "$profile" \
+  --region "$region" \
+  --command-id "$command_id" \
+  --instance-id "$instance_id"
+installation_status=$(run_aws ssm get-command-invocation \
+  --profile "$profile" \
+  --region "$region" \
+  --command-id "$command_id" \
+  --instance-id "$instance_id" \
+  --query Status \
+  --output text)
+[ "$installation_status" = "Success" ] || {
+  echo "MCP installation failed: $installation_status" >&2
+  exit 70
+}
 
 run_aws cloudformation describe-stacks \
   --profile "$profile" \
