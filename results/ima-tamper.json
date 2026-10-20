@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "experiment": "ima-tamper",
+  "status": "pass",
+  "generated_at": "2026-10-20T02:58:20.170Z",
+  "repository_revision": "bd8dec86d7bcd518e86441478b0a9cd7d4d06c6b",
+  "repository_dirty": false,
+  "versions": {
+    "node": "v24.11.0",
+    "keylime": "7.14.1-5.el10_2.1",
+    "swtpm": "0.9.0-5.el10",
+    "kernel": "6.12.0-211.64.1.el10_2.x86_64",
+    "ami_id": "ami-0281f4b4279b17b5b",
+    "instance_type": "t3.small"
+  },
+  "tpm_type": "swtpm",
+  "ima_mode": "kernel log replayed into swtpm PCR 10 by keylime_ima_emulator",
+  "runtime_policy_sha256": "sha256:61a0affd7a71cbbdf9656b12fe36a5c1f2e9af77ff50890c46b64f0da52e56fd",
+  "instance_id": "i-0b622aa60f8bfcf56",
+  "agent_uuid": "d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
+  "scenarios": [
+    {
+      "name": "ima_active_before_tamper",
+      "expected": "pass",
+      "observed": {
+        "emulator": "active",
+        "ima_policy_rules": 16,
+        "ima_measurements": 297,
+        "keylime": {
+          "attestation_status": "PASS",
+          "operational_state": "Get Quote",
+          "last_successful_attestation": 1792465072,
+          "severity_level": null,
+          "last_event_id": null,
+          "has_runtime_policy": 1
+        },
+        "raw_status_sha256": "sha256:b1df57f05728f3416718a4ab273d659e28fed9074403cb81c7edbb3706108378"
+      },
+      "passed": true,
+      "started_at": "2026-10-20T02:57:51.390Z",
+      "completed_at": "2026-10-20T02:57:53.662Z"
+    },
+    {
+      "name": "clean_node_allows_exact_workload",
+      "expected": "executed_once",
+      "observed": {
+        "status": 200,
+        "reason": null,
+        "attestation_verdict": "trusted",
+        "workload_executed": true
+      },
+      "passed": true,
+      "started_at": "2026-10-20T02:57:59.183Z",
+      "completed_at": "2026-10-20T02:58:00.730Z"
+    },
+    {
+      "name": "unapproved_program_measured",
+      "expected": "measured",
+      "observed": {
+        "probe_sha256": "sha256:1fc97b328eab92ce529c9469e2ef7fc486ba4fcbbcedae8fd196e35f3bd27a90",
+        "ima_entries": 1
+      },
+      "passed": true,
+      "started_at": "2026-10-20T02:58:00.730Z",
+      "completed_at": "2026-10-20T02:58:03.044Z"
+    },
+    {
+      "name": "verifier_detects_unapproved_program",
+      "expected": "not_pass",
+      "observed": {
+        "keylime": {
+          "attestation_status": "FAIL",
+          "operational_state": "Invalid Quote",
+          "last_successful_attestation": 1792465080,
+          "severity_level": 6,
+          "last_event_id": "ima.validation.ima-ng.not_in_allowlist",
+          "has_runtime_policy": 1
+        },
+        "raw_status_sha256": "sha256:e63af37bd132bf59ba8fa8b301bbff06ed10a15a7c9e38a0645aa0452e6d551d",
+        "detection_seconds_upper_bound": 2.3
+      },
+      "passed": true,
+      "started_at": "2026-10-20T02:58:03.044Z",
+      "completed_at": "2026-10-20T02:58:05.316Z"
+    },
+    {
+      "name": "approved_request_denied_after_tamper",
+      "expected": "denied",
+      "observed": {
+        "status": 500,
+        "reason": "effect_indeterminate",
+        "attestation_verdict": null,
+        "workload_executed": null
+      },
+      "passed": true,
+      "started_at": "2026-10-20T02:58:05.316Z",
+      "completed_at": "2026-10-20T02:58:06.599Z"
+    }
+  ],
+  "timeline": [
+    {
+      "step": "ima_precheck",
+      "outcome": "success",
+      "at": "2026-10-20T02:57:53.662Z"
+    },
+    {
+      "step": "ssm_tunnel_ready",
+      "outcome": "success",
+      "at": "2026-10-20T02:57:57.247Z",
+      "instance_id": "i-0b622aa60f8bfcf56"
+    },
+    {
+      "step": "unapproved_program_executed",
+      "outcome": "success",
+      "at": "2026-10-20T02:58:03.044Z"
+    },
+    {
+      "step": "verifier_status_after_tamper",
+      "outcome": "detected",
+      "at": "2026-10-20T02:58:05.316Z"
+    }
+  ],
+  "node_left_failed": true,
+  "run_notes": [
+    "Node bootstrapped from template e45cc94, where the status helper was written after the runtime policy, so the clean node first failed on /usr/local/libexec/ec528-keylime-status. Before this run, the policy was regenerated on the node and the agent re-enrolled using the same commands as the fixed template (e2f12da)."
+  ],
+  "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "IMA measurements are recorded by the real kernel but copied into the swtpm PCR 10 by a userspace emulator (keylime_ima_emulator); root on the node could forge them.",
+    "The runtime policy was generated on the node from its own filesystem at boot (trust on first use).",
+    "Only executed and executable-mapped files are measured. tmpfs and other in-memory filesystems are not measured, and the SSM per-command script directory is excluded.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.",
+    "The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval."
+  ]
+}
