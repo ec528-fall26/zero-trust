@@ -33,3 +33,21 @@ Additional limitations for this experiment:
 - Only executed and executable-mapped files are measured. tmpfs and other
   in-memory filesystems are not measured, and the SSM per-command script
   directory is excluded.
+
+## Tracing with OpenTelemetry (optional)
+
+The cloud experiments emit OpenTelemetry spans when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set; otherwise tracing is off and nothing
+changes. Each scenario, Keylime MCP call, SSM command, tunnel, and nono step
+becomes a span. Spans hold only step names, outcomes, HTTP statuses, refusal
+reasons, and public IDs or digests, never tokens, receipts, or raw Keylime
+responses.
+
+```bash
+make jaeger                     # start a local Jaeger (UI at http://127.0.0.1:16686)
+make trace-replay               # show already-recorded runs from results/*.json
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 make ima-tamper   # trace a live run
+```
+
+Replayed runs carry `ec528.replayed=true` and use the timestamps stored in the
+results file. When searching in Jaeger, widen "Lookback" to cover the run date.

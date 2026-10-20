@@ -14,6 +14,16 @@ import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
+import {
+  addEvent,
+  initTelemetry,
+  markOutcome,
+  scenarioSpan,
+  setAttributes,
+  shutdownTelemetry,
+  tracedKeylimeHandler,
+  withSpan,
+} from './telemetry.mjs';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,6 +78,12 @@ async function runAws(arguments_, environment, timeout = 60_000) {
 }
 
 async function runSsm(commands, context) {
+  return withSpan('ssm.run_command', { 'ssm.command_count': commands.length }, () => (
+    runSsmUntraced(commands, context)
+  ));
+}
+
+async function runSsmUntraced(commands, context) {
   const parameters = JSON.stringify({ commands, executionTimeout: ['180'] });
   const commandId = await runAws([
     'ssm', 'send-command',
@@ -174,7 +190,7 @@ function responseSummary(response) {
   };
 }
 
-async function main() {
+async function runExperiment() {
   const outputPath = path.resolve(
     process.argv[2] || path.join(repositoryRoot, 'results', 'ima-tamper.json'),
   );
@@ -193,6 +209,7 @@ async function main() {
 
   const mark = (step, outcome, details = {}) => {
     timeline.push({ step, outcome, at: new Date().toISOString(), ...details });
+    addEvent(step, { outcome, ...details });
   };
   const record = (name, expected, observed, passed, startedAt) => {
     scenarios.push({
@@ -253,7 +270,7 @@ async function main() {
     });
     tunnel.stdout.resume();
     tunnel.stderr.resume();
-    await waitForHealth(endpoint, tunnel);
+    await withSpan('ssm.tunnel_open', {}, () => waitForHealth(endpoint, tunnel));
     mark('ssm_tunnel_ready', 'success', { instance_id: instanceId });
 
     const tokenBytes = await readFile(tokenPath);
@@ -263,12 +280,12 @@ async function main() {
     } finally {
       tokenBytes.fill(0);
     }
-    const keylimeHandler = createKeylimeMcpHandler({
+    const keylimeHandler = tracedKeylimeHandler(createKeylimeMcpHandler({
       endpoint,
       token,
       allowInsecureLoopback: true,
       timeoutMilliseconds: 25_000,
-    });
+    }));
     const manifest = JSON.parse(await readFile(
       path.join(repositoryRoot, 'public', '.well-known', 'agent-actions.json'),
       'utf8',
@@ -307,13 +324,14 @@ async function main() {
     };
 
     startedAt = new Date().toISOString();
-    let snapshot = await (await approvedController('clean')).execute('approved');
+    let snapshot = await scenarioSpan('clean_node_allows_exact_workload', 'executed_once',
+      async () => (await approvedController('clean')).execute('approved'));
     const clean = responseSummary(snapshot.last_response);
     record('clean_node_allows_exact_workload', 'executed_once', clean,
       clean.status === 200 && clean.workload_executed === true, startedAt);
 
     startedAt = new Date().toISOString();
-    const probe = keyValues(await runSsm([
+    const probe = keyValues(await withSpan('node.run_unapproved_program', {}, () => runSsm([
       'set -eu',
       'probe=/root/ec528-unapproved-probe.sh',
       // Unique content so the digest cannot already be in any policy.
@@ -322,7 +340,7 @@ async function main() {
       '"$probe" >/dev/null',
       "printf 'probe_sha256=sha256:%s\\n' \"$(sha256sum \"$probe\" | cut -d' ' -f1)\"",
       "printf 'probe_measured=%s\\n' \"$(grep -c ec528-unapproved-probe /sys/kernel/security/ima/ascii_runtime_measurements || true)\"",
-    ], context));
+    ], context)));
     const tamperedAt = Date.now();
     mark('unapproved_program_executed', 'success');
     record('unapproved_program_measured', 'measured', {
@@ -331,12 +349,19 @@ async function main() {
     }, Number(probe.probe_measured) >= 1, startedAt);
 
     startedAt = new Date().toISOString();
-    let after = await keylimeStatus(context);
-    while (after.sanitized.attestation_status === 'PASS'
-        && Date.now() - tamperedAt < DETECTION_TIMEOUT_MS) {
-      await new Promise((resolve) => setTimeout(resolve, 3_000));
-      after = await keylimeStatus(context);
-    }
+    const after = await withSpan('keylime.wait_for_detection', {}, async (span) => {
+      let status = await keylimeStatus(context);
+      while (status.sanitized.attestation_status === 'PASS'
+          && Date.now() - tamperedAt < DETECTION_TIMEOUT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+        status = await keylimeStatus(context);
+      }
+      setAttributes(span, {
+        'keylime.attestation_status': status.sanitized.attestation_status,
+        'keylime.last_event_id': status.sanitized.last_event_id,
+      });
+      return status;
+    });
     const detectionSeconds = (Date.now() - tamperedAt) / 1_000;
     mark('verifier_status_after_tamper', after.sanitized.attestation_status === 'PASS' ? 'not_detected' : 'detected');
     record('verifier_detects_unapproved_program', 'not_pass', {
@@ -346,7 +371,8 @@ async function main() {
     }, after.sanitized.attestation_status !== 'PASS', startedAt);
 
     startedAt = new Date().toISOString();
-    snapshot = await (await approvedController('after-tamper')).execute('approved');
+    snapshot = await scenarioSpan('approved_request_denied_after_tamper', 'denied',
+      async () => (await approvedController('after-tamper')).execute('approved'));
     const denied = responseSummary(snapshot.last_response);
     record('approved_request_denied_after_tamper', 'denied', denied,
       denied.status !== 200 && denied.workload_executed !== true, startedAt);
@@ -422,6 +448,18 @@ async function main() {
   } finally {
     await stopTunnel(tunnel);
     await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+async function main() {
+  const traced = await initTelemetry('ec528-ima-tamper');
+  try {
+    await withSpan('ima.tamper_experiment', {}, async (span) => {
+      await runExperiment();
+      markOutcome(span, !process.exitCode);
+    });
+  } finally {
+    if (traced) await shutdownTelemetry();
   }
 }
 

@@ -16,6 +16,15 @@ import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
+import {
+  addEvent,
+  initTelemetry,
+  markOutcome,
+  scenarioSpan,
+  shutdownTelemetry,
+  tracedKeylimeHandler,
+  withSpan,
+} from './telemetry.mjs';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -88,6 +97,12 @@ async function runAws(arguments_, environment, timeout = 60_000) {
 }
 
 async function runSsm(commands, context) {
+  return withSpan('ssm.run_command', { 'ssm.command_count': commands.length }, () => (
+    runSsmUntraced(commands, context)
+  ));
+}
+
+async function runSsmUntraced(commands, context) {
   const parameters = JSON.stringify({ commands, executionTimeout: ['180'] });
   const commandId = await runAws([
     'ssm', 'send-command',
@@ -187,7 +202,7 @@ function scenarioRecord(name, expected, snapshot, passed, startedAt) {
   };
 }
 
-async function main() {
+async function runExperiment() {
   const outputPath = path.resolve(
     process.argv[2] || path.join(repositoryRoot, 'results', 'demo2-end-to-end.json'),
   );
@@ -211,6 +226,7 @@ async function main() {
 
   const mark = (step, outcome, details = {}) => {
     timeline.push({ step, outcome, at: new Date().toISOString(), ...details });
+    addEvent(step, { outcome, ...details });
   };
 
   try {
@@ -266,19 +282,21 @@ async function main() {
 
     const requestPath = path.join(directories.outbox, `${requestId}.json`);
     const encodedRequest = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
-    await requiredCommand(nono, [
-      'run', '--silent',
-      '--profile', profilePath,
-      '--workdir', directories.work,
-      '--allow-cwd',
-      '--strict-broker-path',
-      '--audit-integrity',
-      '--', '/bin/sh', '-c',
-      `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 -D > ${shellQuote(requestPath)}`,
-    ], { timeout: 30_000 });
+    await withSpan('nono.agent_writes_request', { 'ec528.request_id': requestId }, () => (
+      requiredCommand(nono, [
+        'run', '--silent',
+        '--profile', profilePath,
+        '--workdir', directories.work,
+        '--allow-cwd',
+        '--strict-broker-path',
+        '--audit-integrity',
+        '--', '/bin/sh', '-c',
+        `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 -D > ${shellQuote(requestPath)}`,
+      ], { timeout: 30_000 })
+    ));
     mark('nono_agent_request_written', 'success', { request_id: requestId });
 
-    await requiredCommand(python, [
+    await withSpan('watcher.build_trusted_action', {}, () => requiredCommand(python, [
       path.join(repositoryRoot, 'src', 'controller', 'outbox_watcher.py'),
       '--outbox', directories.outbox,
       '--inbox', directories.inbox,
@@ -287,7 +305,7 @@ async function main() {
       '--artifact', artifactPath,
       '--allowed-target', 'aws-keylime-demo-01',
       '--policy-version', 'demo-2.1',
-    ], { env: { ...process.env, PYTHONPATH: path.join(repositoryRoot, 'src') } });
+    ], { env: { ...process.env, PYTHONPATH: path.join(repositoryRoot, 'src') } }));
     const action = JSON.parse(await readFile(
       path.join(directories.storage, `${requestId}.action.json`),
       'utf8',
@@ -311,7 +329,7 @@ async function main() {
     });
     tunnel.stdout.resume();
     tunnel.stderr.resume();
-    await waitForHealth(endpoint, tunnel);
+    await withSpan('ssm.tunnel_open', {}, () => waitForHealth(endpoint, tunnel));
     mark('ssm_tunnel_ready', 'success', { instance_id: instanceId });
 
     const tokenBytes = await readFile(tokenPath);
@@ -321,12 +339,12 @@ async function main() {
     } finally {
       tokenBytes.fill(0);
     }
-    const keylimeHandler = createKeylimeMcpHandler({
+    const keylimeHandler = tracedKeylimeHandler(createKeylimeMcpHandler({
       endpoint,
       token,
       allowInsecureLoopback: true,
       timeoutMilliseconds: 25_000,
-    });
+    }));
     const manifest = JSON.parse(await readFile(
       path.join(repositoryRoot, 'public', '.well-known', 'agent-actions.json'),
       'utf8',
@@ -341,7 +359,7 @@ async function main() {
     });
 
     let startedAt = new Date().toISOString();
-    let snapshot = await controller.execute('missing');
+    let snapshot = await scenarioSpan('no_receipt', 'denied', () => controller.execute('missing'));
     scenarios.push(scenarioRecord(
       'no_receipt', 'denied', snapshot, snapshot.last_response.status === 428, startedAt,
     ));
@@ -349,7 +367,7 @@ async function main() {
     controller.approve('operator');
     mark('emilia_first_distinct_signature', 'pending');
     startedAt = new Date().toISOString();
-    snapshot = await controller.execute('missing');
+    snapshot = await scenarioSpan('one_of_three_signatures', 'pending_and_denied', () => controller.execute('missing'));
     scenarios.push(scenarioRecord(
       'one_of_three_signatures', 'pending_and_denied', snapshot,
       controller.snapshot().receipt_ready === false && snapshot.last_response.status === 428,
@@ -361,7 +379,7 @@ async function main() {
     mark('emilia_second_distinct_signature', 'receipt_issued');
 
     startedAt = new Date().toISOString();
-    snapshot = await controller.execute('tampered');
+    snapshot = await scenarioSpan('action_changed_after_approval', 'denied', () => controller.execute('tampered'));
     scenarios.push(scenarioRecord(
       'action_changed_after_approval', 'denied', snapshot,
       snapshot.last_response.status === 428
@@ -370,7 +388,7 @@ async function main() {
     ));
 
     startedAt = new Date().toISOString();
-    snapshot = await controller.execute('approved');
+    snapshot = await scenarioSpan('exact_action_end_to_end', 'executed_once', () => controller.execute('approved'));
     scenarios.push(scenarioRecord(
       'exact_action_end_to_end', 'executed_once', snapshot,
       snapshot.last_response.status === 200
@@ -379,7 +397,7 @@ async function main() {
     ));
 
     startedAt = new Date().toISOString();
-    snapshot = await controller.execute('replay');
+    snapshot = await scenarioSpan('used_receipt_replay', 'denied', () => controller.execute('replay'));
     scenarios.push(scenarioRecord(
       'used_receipt_replay', 'denied', snapshot,
       snapshot.last_response.status === 428
@@ -402,7 +420,7 @@ async function main() {
     mark('keylime_agent_stopped', 'success');
     await new Promise((resolve) => setTimeout(resolve, 35_000));
     startedAt = new Date().toISOString();
-    snapshot = await stoppedController.execute('approved');
+    snapshot = await scenarioSpan('keylime_agent_stopped', 'denied', () => stoppedController.execute('approved'));
     scenarios.push(scenarioRecord(
       'keylime_agent_stopped', 'denied', snapshot,
       snapshot.last_response.status !== 200,
@@ -425,7 +443,7 @@ async function main() {
     recoveryController.approve('operator');
     recoveryController.approve('security');
     startedAt = new Date().toISOString();
-    snapshot = await recoveryController.execute('approved');
+    snapshot = await scenarioSpan('keylime_agent_recovered', 'executed_once', () => recoveryController.execute('approved'));
     scenarios.push(scenarioRecord(
       'keylime_agent_recovered', 'executed_once', snapshot,
       snapshot.last_response.status === 200
@@ -539,6 +557,18 @@ async function main() {
     }
     await stopTunnel(tunnel);
     await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+async function main() {
+  const traced = await initTelemetry('ec528-demo2-end-to-end');
+  try {
+    await withSpan('demo2.end_to_end', {}, async (span) => {
+      await runExperiment();
+      markOutcome(span, !process.exitCode);
+    });
+  } finally {
+    if (traced) await shutdownTelemetry();
   }
 }
 

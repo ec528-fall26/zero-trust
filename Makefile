@@ -1,4 +1,4 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper jaeger trace-replay ci
 
 PYTHON ?= python3
 
@@ -35,5 +35,14 @@ demo2-attestation:
 # Needs the AWS stack and leaves its node in the failed state; tear down after.
 ima-tamper:
 	node experiments/ima_tamper.mjs
+
+# Local trace viewer (loopback only). UI: http://127.0.0.1:16686
+jaeger:
+	docker rm -f ec528-jaeger >/dev/null 2>&1 || true
+	docker run -d --name ec528-jaeger -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/all-in-one:1.62.0
+
+# Replay recorded results files as traces into the local Jaeger.
+trace-replay:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 node experiments/trace_replay.mjs
 
 ci: check test
