@@ -280,26 +280,10 @@ Resources:
           systemctl enable --now keylime_agent
           sleep 5
 
-          # Build the IMA runtime policy from this node's own clean filesystem plus the
-          # current measurement log (for the boot aggregate).  This is trust on first
-          # use: it is only as good as the node at this moment.  The per-command script
-          # directory of the SSM agent is excluded because each command is a new file.
-          install -d -o root -g root -m 0700 /var/lib/ec528
-          printf '%s\n' '^/var/lib/amazon/ssm/.*' > /var/lib/ec528/ima-exclude.txt
-          keylime-policy create runtime \
-            --rootfs / \
-            --skip-path /proc,/sys,/dev,/run,/tmp,/var/tmp,/var/log,/var/cache,/var/lib/amazon,/var/lib/keylime,/var/lib/swtpm,/var/lib/ec528,/usr/share/doc,/usr/share/man,/usr/share/locale \
-            --ima-measurement-list /sys/kernel/security/ima/ascii_runtime_measurements \
-            --excludelist /var/lib/ec528/ima-exclude.txt \
-            --output /var/lib/ec528/runtime-policy.json
-          chmod 0600 /var/lib/ec528/runtime-policy.json
-
           agent_uuid='${AgentUuid}'
-          keylime_tenant -c delete -u "$agent_uuid" >/dev/null 2>&1 || true
-          keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1 \
-            --runtime-policy /var/lib/ec528/runtime-policy.json
-          sleep 5
 
+          # Every executable the node will run must exist before the runtime policy is
+          # built, so the status helper is written first.
           cat > /usr/local/libexec/ec528-keylime-status <<STATUS
           #!/bin/sh
           set -eu
@@ -333,6 +317,25 @@ Resources:
           ' '$agent_uuid' "\$temporary"
           STATUS
           chmod 0755 /usr/local/libexec/ec528-keylime-status
+
+          # Build the IMA runtime policy from this node's own clean filesystem plus the
+          # current measurement log (for the boot aggregate).  This is trust on first
+          # use: it is only as good as the node at this moment.  The per-command script
+          # directory of the SSM agent is excluded because each command is a new file.
+          install -d -o root -g root -m 0700 /var/lib/ec528
+          printf '%s\n' '^/var/lib/amazon/ssm/.*' > /var/lib/ec528/ima-exclude.txt
+          keylime-policy create runtime \
+            --rootfs / \
+            --skip-path /proc,/sys,/dev,/run,/tmp,/var/tmp,/var/log,/var/cache,/var/lib/amazon,/var/lib/keylime,/var/lib/swtpm,/var/lib/ec528,/usr/share/doc,/usr/share/man,/usr/share/locale \
+            --ima-measurement-list /sys/kernel/security/ima/ascii_runtime_measurements \
+            --excludelist /var/lib/ec528/ima-exclude.txt \
+            --output /var/lib/ec528/runtime-policy.json
+          chmod 0600 /var/lib/ec528/runtime-policy.json
+
+          keylime_tenant -c delete -u "$agent_uuid" >/dev/null 2>&1 || true
+          keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1 \
+            --runtime-policy /var/lib/ec528/runtime-policy.json
+          sleep 5
 
           printf '%s\n' keylime-ready > /var/lib/ec528-bootstrap-result
 
