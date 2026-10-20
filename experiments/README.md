@@ -15,3 +15,21 @@ All experiment results carry these scope limitations:
   attestation.
 - The three EMILIA signer keys are on one machine. This proves the protocol
   works, not independent human approval.
+
+## IMA tamper experiment (`make ima-tamper`)
+
+Runs against the AWS node from `infra/aws` and writes `results/ima-tamper.json`.
+A clean node runs the approved workload. Then an unapproved program is executed
+on the node, Keylime's IMA runtime policy must mark the node as failed, and the
+next fully approved request must be denied. The node stays failed afterwards
+(the IMA log keeps the probe until reboot), so run `infra/aws/teardown.sh` next.
+
+Additional limitations for this experiment:
+
+- IMA measurements come from the real kernel but are copied into the swtpm
+  PCR 10 by `keylime_ima_emulator`; root on the node could forge them.
+- The runtime policy is generated on the node from its own filesystem at boot
+  (trust on first use).
+- Only executed and executable-mapped files are measured. tmpfs and other
+  in-memory filesystems are not measured, and the SSM per-command script
+  directory is excluded.

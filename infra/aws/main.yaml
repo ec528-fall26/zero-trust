@@ -130,6 +130,33 @@ Resources:
             swtpm-tools \
             tpm2-tools
 
+          # IMA: measure every program the node executes or maps as executable.  This
+          # AMI boots without a TPM, so the kernel keeps the measurement log in
+          # TPM-bypass mode; ec528-ima-emulator replays it into the swtpm PCR 10 below.
+          # The policy is loaded once at runtime (CONFIG_IMA_WRITE_POLICY=y).  If the
+          # kernel refuses it, set -e stops the bootstrap and the install fails closed.
+          # Pseudo and in-memory filesystems (including tmpfs) are not measured.
+          install -d -m 0755 /etc/ima
+          cat > /etc/ima/ima-policy <<'IMA'
+          dont_measure fsmagic=0x9fa0
+          dont_measure fsmagic=0x62656572
+          dont_measure fsmagic=0x64626720
+          dont_measure fsmagic=0x01021994
+          dont_measure fsmagic=0x858458f6
+          dont_measure fsmagic=0x1cd1
+          dont_measure fsmagic=0x42494e4d
+          dont_measure fsmagic=0x73636673
+          dont_measure fsmagic=0xf97cff8c
+          dont_measure fsmagic=0x27e0eb
+          dont_measure fsmagic=0x63677270
+          dont_measure fsmagic=0x6e736673
+          dont_measure fsmagic=0xde5e81e4
+          measure func=BPRM_CHECK
+          measure func=FILE_MMAP mask=MAY_EXEC
+          measure func=MODULE_CHECK uid=0
+          IMA
+          cat /etc/ima/ima-policy > /sys/kernel/security/ima/policy
+
           install -d -o tss -g tss -m 0700 /var/lib/swtpm/keylime
           if [ ! -f /var/lib/swtpm/keylime/tpm2-00.permall ]; then
             sudo -u tss swtpm_setup \
@@ -198,6 +225,33 @@ Resources:
           Environment="TCTI=swtpm:host=127.0.0.1,port=2321"
           UNIT
 
+          # Development-only bridge: copy IMA measurements into the swtpm sha256 PCR 10
+          # bank (the agent quotes sha256).  --ima-hash-alg names the template-hash
+          # column of ascii_runtime_measurements, which is sha1.
+          # bank so the verifier can check the log against a quote.  It is restarted
+          # with swtpm (PartOf) because a restarted swtpm starts with clean PCRs.
+          cat > /etc/systemd/system/ec528-ima-emulator.service <<'UNIT'
+          [Unit]
+          Description=EC528 IMA log to swtpm PCR 10 bridge (development only)
+          BindsTo=swtpm-keylime.service
+          PartOf=swtpm-keylime.service
+          After=swtpm-keylime.service
+          Before=keylime_agent.service
+
+          [Service]
+          Environment="TCTI=swtpm:host=127.0.0.1,port=2321"
+          ExecStart=/usr/bin/keylime_ima_emulator --hash_algs sha256 --ima-hash-alg sha1
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          cat > /etc/systemd/system/keylime_agent.service.d/20-ima-emulator.conf <<'UNIT'
+          [Unit]
+          Requires=ec528-ima-emulator.service
+          After=ec528-ima-emulator.service
+          UNIT
+
           cp \
             /var/lib/swtpm-localca/swtpm-localca-rootca-cert.pem \
             /var/lib/swtpm-localca/issuercert.pem \
@@ -217,6 +271,8 @@ Resources:
 
           systemctl daemon-reload
           systemctl enable --now swtpm-keylime
+          systemctl enable --now ec528-ima-emulator
+          sleep 3
           systemctl enable --now keylime_verifier
           sleep 3
           systemctl enable --now keylime_registrar
@@ -224,11 +280,25 @@ Resources:
           systemctl enable --now keylime_agent
           sleep 5
 
+          # Build the IMA runtime policy from this node's own clean filesystem plus the
+          # current measurement log (for the boot aggregate).  This is trust on first
+          # use: it is only as good as the node at this moment.  The per-command script
+          # directory of the SSM agent is excluded because each command is a new file.
+          install -d -o root -g root -m 0700 /var/lib/ec528
+          printf '%s\n' '^/var/lib/amazon/ssm/.*' > /var/lib/ec528/ima-exclude.txt
+          keylime-policy create runtime \
+            --rootfs / \
+            --skip-path /proc,/sys,/dev,/run,/tmp,/var/tmp,/var/log,/var/cache,/var/lib/amazon,/var/lib/keylime,/var/lib/swtpm,/var/lib/ec528,/usr/share/doc,/usr/share/man,/usr/share/locale \
+            --ima-measurement-list /sys/kernel/security/ima/ascii_runtime_measurements \
+            --excludelist /var/lib/ec528/ima-exclude.txt \
+            --output /var/lib/ec528/runtime-policy.json
+          chmod 0600 /var/lib/ec528/runtime-policy.json
+
           agent_uuid='${AgentUuid}'
-          if ! keylime_tenant -c cvstatus -u "$agent_uuid" >/dev/null 2>&1; then
-            keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1
-            sleep 5
-          fi
+          keylime_tenant -c delete -u "$agent_uuid" >/dev/null 2>&1 || true
+          keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1 \
+            --runtime-policy /var/lib/ec528/runtime-policy.json
+          sleep 5
 
           cat > /usr/local/libexec/ec528-keylime-status <<STATUS
           #!/bin/sh
@@ -273,3 +343,5 @@ Outputs:
     Value: !Ref KeylimeSecurityGroup
   TpmType:
     Value: swtpm-development-only
+  ImaMode:
+    Value: kernel-log-replayed-into-swtpm-development-only

@@ -1,4 +1,4 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper ci
 
 PYTHON ?= python3
 
@@ -31,5 +31,9 @@ demo2-authorization:
 
 demo2-attestation:
 	./experiments/demo2_attestation.sh
+
+# Needs the AWS stack and leaves its node in the failed state; tear down after.
+ima-tamper:
+	node experiments/ima_tamper.mjs
 
 ci: check test

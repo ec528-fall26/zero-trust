@@ -127,12 +127,17 @@ async function runSsm(commands, context) {
 function keylimeRecoveryCommands(agentUuid, waitSeconds = 15) {
   return [
     'systemctl stop keylime_agent.service',
+    // Restarting swtpm also restarts ec528-ima-emulator (PartOf=), which
+    // replays the IMA log into the fresh PCR 10 before the agent quotes.
     'systemctl restart swtpm-keylime.service',
-    'sleep 2',
+    'sleep 5',
     'systemctl start keylime_agent.service',
     'sleep 5',
     `keylime_tenant -c delete -u ${agentUuid}`,
-    `keylime_tenant -c add -u ${agentUuid} -t 127.0.0.1 -v 127.0.0.1`,
+    'if [ -f /var/lib/ec528/runtime-policy.json ]; then '
+      + `keylime_tenant -c add -u ${agentUuid} -t 127.0.0.1 -v 127.0.0.1 `
+      + '--runtime-policy /var/lib/ec528/runtime-policy.json; '
+      + `else keylime_tenant -c add -u ${agentUuid} -t 127.0.0.1 -v 127.0.0.1; fi`,
     `sleep ${waitSeconds}`,
     'systemctl is-active swtpm-keylime.service keylime_agent.service',
   ];
