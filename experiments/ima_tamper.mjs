@@ -383,6 +383,9 @@ async function main() {
       scenarios,
       timeline,
       node_left_failed: true,
+      // Free-text operator note for anything done to the node outside this
+      // script (for example a manual re-enrollment).
+      run_notes: process.env.EXPERIMENT_NOTE ? [process.env.EXPERIMENT_NOTE] : [],
       limitations: [...LIMITATIONS],
     };
     await writeResult(outputPath, result);
