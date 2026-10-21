@@ -3,171 +3,558 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EC528 Zero-Trust Demo</title>
+  <title>Zero Trust Cryptography: Demo 2</title>
   <style>
     :root {
-      --bg: #05070c; --panel: #0b111c; --panel-2: #101827; --line: #1f2a3b; --text: #e8ecf2; --muted: #94a3b8;
-      --tan: #c9a882; --slide-blue: #4da3ff;
-      --nono: #000000; --nono-text: #ffffff; --nono-accent: #f2a65a;
-      --emilia: #0f1626; --emilia-gold: #b8913a; --emilia-text: #f4e7c6;
-      --keylime: #8dc63f; --keylime-light: #c4e08a; --keylime-dark: #0e7a5f;
-      --aws: #ff9900; --aws-ink: #232f3e;
-      --otel-blue: #425cc7; --otel-gold: #f5a800; --jaeger: #4fc3d9;
-      --ok: #3ddc97; --bad: #ff5c5c;
+      --bg: #05070c;
+      --panel: #0a101a;
+      --panel-2: #0f1724;
+      --line: #1b2636;
+      --line-subtle: #121a26;
+      --text: #e8ecf2;
+      --muted: #94a3b8;
+      --tan: #c9a882;
+      --slide-blue: #4da3ff;
+      --nono: #000000;
+      --nono-text: #ffffff;
+      --nono-accent: #f2a65a;
+      --emilia: #0f1626;
+      --emilia-gold: #b8913a;
+      --emilia-text: #f4e7c6;
+      --keylime: #8dc63f;
+      --keylime-light: #c4e08a;
+      --keylime-dark: #0e7a5f;
+      --aws: #ff9900;
+      --aws-ink: #232f3e;
+      --otel-blue: #425cc7;
+      --otel-gold: #f5a800;
+      --jaeger: #4fc3d9;
+      --ok: #3ddc97;
+      --bad: #ff5c5c;
       --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 Poppins, "Avenir Next", system-ui, -apple-system, sans-serif; }
-    main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 56px; }
-    .kicker { color: var(--muted); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
-    h1 { font-weight: 300; font-size: 40px; letter-spacing: .02em; margin: 6px 0 0; text-transform: uppercase; }
-    .rule { width: 56px; height: 3px; background: var(--tan); margin: 14px 0 16px; border: 0; }
-    h2 { font-weight: 300; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; margin: 36px 0 4px; }
-    h2 + .rule { margin: 10px 0 14px; width: 40px; }
-    .lede { color: var(--muted); max-width: 780px; margin: 0 0 18px; }
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    body {
+      margin: 0;
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(ellipse 65% 50% at 10% 8%, rgba(28, 64, 118, 0.25), transparent 60%),
+        radial-gradient(ellipse 55% 45% at 90% 88%, rgba(18, 52, 78, 0.2), transparent 60%);
+      background-attachment: fixed;
+      color: var(--text);
+      font: 15px/1.55 Poppins, "Avenir Next", system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 24px 32px 56px;
+    }
 
-    .locks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .lock { padding: 16px 18px; }
-    .lock .head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-    .lock h3 { margin: 0; font-weight: 400; font-size: 17px; }
-    .lock p { margin: 0; color: var(--muted); font-size: 14.5px; }
-    .logo { flex: none; width: 52px; height: 52px; border-radius: 8px; display: grid; place-items: center; }
-    .logo.nono { background: var(--nono); color: var(--nono-text); font: 700 13px var(--mono); width: 92px; border: 1px solid #222; }
-    .logo.emilia { background: var(--emilia); border: 1px solid #1d2840; }
+    /* Header & Google-style horizontal tab bar */
+    .top-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-weight: 400;
+      font-size: 30px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      color: var(--text);
+    }
+    h2 {
+      font-weight: 400;
+      font-size: 21px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      color: var(--text);
+    }
+    .rule {
+      width: 40px;
+      height: 2px;
+      background: var(--tan);
+      margin: 8px 0 0;
+      border: 0;
+    }
+    .boundary {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: right;
+    }
+    .boundary b {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .boundary p {
+      margin: 2px 0;
+    }
 
-    .boundary { margin-top: 16px; padding: 10px 16px; font-size: 14px; color: var(--muted); border-left: 3px solid var(--tan); background: var(--panel); border-radius: 0 10px 10px 0; }
-    .boundary b { color: var(--text); font-weight: 500; }
-    .boundary p { margin: 2px 0; }
+    /* Google-like horizontal navigation bar */
+    .nav-tabs {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 16px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      border-radius: 0;
+      color: var(--muted);
+      font: 500 14px/1.2 inherit;
+      padding: 10px 2px 12px;
+      margin: 0;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+    }
+    .nav-tab:hover {
+      color: var(--text);
+      border-color: transparent;
+      background: transparent;
+    }
+    .nav-tab.active {
+      color: var(--text);
+      border-bottom-color: var(--text);
+    }
 
-    .pipeline { margin-top: 18px; padding: 10px 10px 0; }
-    svg { display: block; width: 100%; height: auto; }
-    .st rect.box { stroke-width: 1.5; }
+    /* Flat horizontal action strip (no bottom line) */
+    .action-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding: 4px 0 18px;
+    }
+    .action-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .action-group + .action-group {
+      padding-left: 20px;
+      border-left: 1px solid var(--line);
+    }
+    .action-group .label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+    button {
+      font: 400 13.5px/1.2 inherit;
+      color: var(--muted);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 7px 13px;
+      margin: 0;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    button:hover {
+      color: var(--text);
+      border-color: var(--slide-blue);
+      background: var(--panel-2);
+    }
+    button.done {
+      border-color: var(--emilia-gold);
+      color: var(--emilia-text);
+      background: #1b1608;
+    }
+    button.sel {
+      border-color: var(--jaeger);
+      color: #dff7fb;
+      background: #0b2229;
+    }
+
+    /* Flat containers without horizontal border clutter */
+    .panel {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+    }
+
+    .view-section[hidden] {
+      display: none !important;
+    }
+
+    /* Overview horizontal grid */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    .workspace-grid.single-col {
+      grid-template-columns: 1fr;
+    }
+
+    /* Pipeline & Result */
+    .pipeline {
+      padding: 4px 0 2px;
+      background: var(--panel);
+      border-radius: 2px;
+    }
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .st rect.box { stroke-width: 1.25; }
     .st text { font-family: inherit; }
-    .st .tag { font: 600 12px var(--mono); letter-spacing: .04em; }
-    .st .title { font-size: 18px; font-weight: 500; }
-    .st .sub { font-size: 13.5px; }
+    .st .tag { font: 600 11.5px var(--mono); }
+    .st .title { font-size: 16px; font-weight: 500; }
+    .st .sub { font-size: 12.5px; }
     .badge { transition: opacity .3s; opacity: 0; }
     .badge.show { opacity: 1; }
-    .track { stroke: #2a3a52; stroke-width: 2; stroke-dasharray: 3 7; }
+    .track { stroke: #2a3a52; stroke-width: 1.5; stroke-dasharray: 3 7; }
     #token { transition: transform .5s cubic-bezier(.4, 0, .2, 1), opacity .25s; opacity: 0; }
-    #caption { font-size: 15px; fill: var(--muted); }
+    #caption { font-size: 13.5px; fill: var(--muted); }
     .approver { stroke-width: 1.5; transition: fill .3s; }
 
-    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
-    .group { padding: 14px 16px; }
-    .group .label { font-size: 13px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
-    button { font: inherit; font-size: 15px; color: var(--text); background: var(--panel-2); border: 1px solid #2b3a50; border-radius: 9px; padding: 8px 14px; margin: 4px 6px 4px 0; cursor: pointer; }
-    button:hover { border-color: var(--slide-blue); }
-    button.done { border-color: var(--emilia-gold); color: var(--emilia-text); background: #1b1608; }
-    button.sel { border-color: var(--jaeger); color: #dff7fb; background: #0b2229; }
-
-    .result { margin-top: 16px; padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: start; min-height: 88px; }
-    .result.ok { border-color: var(--ok); }
-    .result.bad { border-color: var(--bad); }
-    .result strong { display: block; font-size: 21px; font-weight: 500; }
+    .result {
+      margin-top: 12px;
+      padding: 14px 16px;
+      background: var(--panel);
+      border-left: 3px solid var(--line);
+      border-radius: 2px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 16px;
+      align-items: center;
+      min-height: 68px;
+    }
+    .result.ok { border-left-color: var(--ok); }
+    .result.bad { border-left-color: var(--bad); }
+    .result strong { display: block; font-size: 18px; font-weight: 500; }
     .result.ok strong { color: var(--ok); }
     .result.bad strong { color: var(--bad); }
-    .result .detail { color: var(--muted); }
-    .pill { font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; white-space: nowrap; }
-    .pill.nono { background: #2a1a0b; color: var(--nono-accent); border: 1px solid #5a3a16; }
-    .pill.emilia { background: #1b1608; color: #e9cf8e; border: 1px solid #5c4818; }
-    .pill.keylime { background: #10240c; color: var(--keylime-light); border: 1px solid #3c6420; }
-    .diff { grid-column: 1 / -1; font-size: 14px; color: var(--muted); }
-    .diff code { color: var(--text); }
+    .result .detail { color: var(--muted); font-size: 14px; }
+    .pill {
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .pill.nono { background: #24170b; color: var(--nono-accent); border: 1px solid #6b431e; }
+    .pill.emilia { background: #0f222d; color: #8ed1e9; border: 1px solid #244b5e; }
+    .pill.keylime { background: #0e2038; color: #8ab8ff; border: 1px solid #254b7c; }
+    .diff { grid-column: 1 / -1; font-size: 13.5px; color: var(--muted); }
+    .diff code { color: var(--text); font-family: var(--mono); }
 
-    .trace { margin-top: 0; overflow: hidden; }
-    .trace-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; background: #000; border-bottom: 1px solid var(--line); }
-    .trace-top .brand { font-weight: 600; letter-spacing: .04em; font-size: 14px; }
+    /* Slide 2: Three Locks flat column layout */
+    .locks {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .lock {
+      padding: 20px;
+      background: var(--panel);
+      border-radius: 2px;
+    }
+    .lock .over {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .lock .head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    .lock h3 {
+      margin: 0;
+      font-weight: 500;
+      font-size: 16px;
+      color: var(--text);
+    }
+    .lock p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .lock p:last-child { margin-bottom: 0; }
+    .logo {
+      flex: none;
+      width: 48px;
+      height: 48px;
+      border-radius: 2px;
+      display: grid;
+      place-items: center;
+    }
+    .logo.nono {
+      background: var(--nono);
+      color: var(--nono-text);
+      font: 700 14px var(--mono);
+      width: 92px;
+      border: 1px solid #222;
+    }
+    .logo.emilia {
+      background: var(--emilia);
+      border: 1px solid #1d2840;
+    }
+
+    /* Slide 10: What stops each attempt table */
+    .stops-wrap {
+      margin-top: 28px;
+    }
+    .stops-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    .stops-table th {
+      text-align: left;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      padding: 10px 12px 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .stops-table td {
+      padding: 11px 12px 11px 0;
+      border-bottom: 1px solid var(--line-subtle);
+    }
+    .stops-table code {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Slide 8: Receipt Breakdown (no horizontal divider lines) */
+    .section-title {
+      margin-bottom: 12px;
+    }
+    .receipt-slide-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr 0.9fr;
+      gap: 14px;
+      align-items: start;
+    }
+    .workspace-grid:not(.single-col) .receipt-slide-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .workspace-grid:not(.single-col) .receipt-notes {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 4px;
+    }
+    .card {
+      background: var(--panel);
+      border: 0;
+      border-radius: 2px;
+      padding: 14px 16px;
+    }
+    .card + .card {
+      margin-top: 12px;
+    }
+    .card .cap {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      font: 13px/1.65 var(--mono);
+      gap: 2px 10px;
+      margin: 0;
+    }
+    .kv dt { color: #79a8ff; }
+    .kv dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+    .hash { font: 13px var(--mono); overflow-wrap: anywhere; color: var(--text); }
+    .signer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      margin: 6px 0;
+      font-family: var(--mono);
+    }
+    .signer .c {
+      width: 16px;
+      height: 16px;
+      border-radius: 2px;
+      border: 1px solid #3b4a63;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+    }
+    .signer.signed .c {
+      background: var(--slide-blue);
+      border-color: var(--slide-blue);
+      color: #05070c;
+      font-weight: 700;
+    }
+    .signer .s { color: var(--muted); margin-left: auto; font-family: inherit; }
+    .receipt-notes p {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .receipt-notes b { color: var(--text); font-weight: 500; }
+    .receipt-notes code { font: 12px var(--mono); color: var(--text); }
+
+    /* Slide 11: Tracing the Full Run in Jaeger */
+    .trace {
+      overflow: hidden;
+      margin-top: 28px;
+    }
+    .trace-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 0 0 8px;
+      background: transparent;
+    }
+    .trace-top-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .trace-top .brand {
+      font-weight: 400;
+      font-size: 21px;
+      color: var(--text);
+    }
     .otel { display: inline-flex; gap: 4px; align-items: center; }
-    .otel i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-    .trace-pick { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px 0; }
-    .trace-pick button { font-size: 13px; padding: 5px 10px; margin: 0; }
-    .trace-meta { padding: 10px 16px 4px; font-size: 14px; color: var(--muted); }
+    .otel i { width: 9px; height: 9px; border-radius: 1px; display: inline-block; }
+    .trace-pick {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 6px 0 4px;
+    }
+    .trace-pick button { font-size: 12.5px; padding: 5px 10px; }
+    .trace-meta { padding: 8px 0 6px; font-size: 13.5px; color: var(--muted); }
     .trace-meta b { color: var(--text); font-weight: 500; }
-    .trace-body { padding: 4px 16px 16px; }
-    .axis, .row { display: grid; grid-template-columns: 300px 1fr; }
+    .trace-body {
+      padding: 8px 16px 16px;
+      background: var(--panel);
+      border-radius: 2px;
+    }
+    .axis, .row { display: grid; grid-template-columns: 280px 1fr; }
     .axis { font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); padding: 6px 0; }
     .ticks { position: relative; height: 16px; }
     .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
     .ticks span:first-child { transform: none; }
     .ticks span:last-child { transform: translateX(-100%); }
-    .row { border-bottom: 1px solid #141c29; min-height: 30px; align-items: center; }
-    .row .op { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; display: flex; align-items: center; gap: 6px; }
-    .row .op .svc { width: 4px; height: 18px; border-radius: 2px; flex: none; }
+    .row { border-bottom: 1px solid var(--line-subtle); min-height: 30px; align-items: center; }
+    .row:last-child { border-bottom: 0; }
+    .row .op {
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .row .op .svc { width: 3px; height: 18px; border-radius: 0; flex: none; }
     .row .op small { color: var(--muted); }
     .lane { position: relative; height: 30px; }
-    .lane .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #141c29; }
-    .bar { position: absolute; top: 8px; height: 14px; border-radius: 3px; width: 0; transition: width .6s ease-out; }
-    .bar.err { outline: 2px solid var(--bad); outline-offset: 1px; }
+    .lane .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-subtle); }
+    .bar { position: absolute; top: 8px; height: 14px; border-radius: 1px; width: 0; transition: width .6s ease-out; }
+    .bar.err { outline: 1.5px solid var(--bad); outline-offset: 1px; }
     .lane .dur { position: absolute; top: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; opacity: 0; transition: opacity .3s; }
-    .empty { color: var(--muted); padding: 18px 0; font-size: 14px; }
+    .empty { color: var(--muted); padding: 10px 0; font-size: 13.5px; }
 
-    .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
-    .anatomy { padding: 14px 16px; display: grid; gap: 10px; }
-    .card { background: var(--emilia); border: 1px solid #1d2840; border-radius: 10px; padding: 10px 14px; }
-    .card .cap { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--emilia-gold); margin-bottom: 6px; }
-    .kv { display: grid; grid-template-columns: 120px 1fr; font: 13.5px var(--mono); gap: 2px 10px; }
-    .kv dt { color: #79a8ff; } .kv dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
-    .hash { font: 14px var(--mono); overflow-wrap: anywhere; }
-    .signer { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 3px 0; }
-    .signer .c { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #3b4a63; display: grid; place-items: center; font-size: 11px; }
-    .signer.signed .c { background: var(--slide-blue); border-color: var(--slide-blue); color: #fff; }
-    .signer .s { color: var(--muted); margin-left: auto; }
-    .logpanel { padding: 14px 16px; }
-    ol#log { list-style: none; padding: 0; margin: 0; max-height: 420px; overflow: auto; }
-    #log li { padding: 6px 0; border-bottom: 1px solid #141c29; font-size: 14px; }
-    #log time { color: var(--muted); font: 12.5px var(--mono); margin-right: 10px; }
-    details { margin-top: 26px; }
-    summary { cursor: pointer; color: var(--muted); }
-    pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; max-height: 22rem; font: 12.5px var(--mono); }
-    @media (max-width: 900px) { .locks, .controls, .two { grid-template-columns: 1fr; } .axis, .row { grid-template-columns: 180px 1fr; } }
-    @media (prefers-reduced-motion: reduce) { #token, .bar, .badge, .approver { transition: none; } }
+    /* Audit & Raw JSON */
+    .audit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 24px;
+      margin-top: 12px;
+    }
+    .logpanel { padding: 16px; background: var(--panel); border-radius: 2px; }
+    .subhead {
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--text);
+      margin: 0 0 10px;
+    }
+    ol#log { list-style: none; padding: 0; margin: 0; max-height: 380px; overflow: auto; }
+    #log li { padding: 6px 0; border-bottom: 1px solid var(--line-subtle); font-size: 13.5px; }
+    #log li:last-child { border-bottom: 0; }
+    #log time { color: var(--muted); font: 12px var(--mono); margin-right: 10px; }
+    .raw-stack { display: grid; gap: 12px; }
+    pre {
+      background: var(--panel);
+      border: 0;
+      border-radius: 2px;
+      padding: 12px;
+      margin: 0;
+      overflow: auto;
+      max-height: 16rem;
+      font: 12px var(--mono);
+    }
+
+    @media (max-width: 1024px) {
+      .workspace-grid, .locks, .receipt-slide-grid, .audit-grid { grid-template-columns: 1fr; }
+      .action-group + .action-group { padding-left: 0; border-left: 0; }
+      .axis, .row { grid-template-columns: 180px 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #token, .bar, .badge, .approver { transition: none; }
+    }
   </style>
 </head>
 <body>
 <main>
-  <div class="kicker">EC528 · Demo 2 · Live dashboard</div>
-  <h1>Zero trust confinement</h1>
-  <hr class="rule">
-  <p class="lede">An AI agent can ask for a job, but the job only runs if three locks open: the agent stays confined, two of three people approve that exact request, and the machine proves it's healthy. Use the buttons below and watch which lock stops each attempt.</p>
-
-  <div class="locks">
-    <div class="panel lock">
-      <div class="head"><div class="logo nono">nono: &gt;..</div><h3>Lock 1 · Confine the agent</h3></div>
-      <p>The agent can only write one request file to a write-only outbox. It can't read it back, use the network, call the executor, or read signing keys. A trusted watcher rebuilds the request with its own IDs and hashes.</p>
+  <header class="top-header">
+    <div>
+      <h1>Zero Trust Cryptography: Demo 2</h1>
+      <hr class="rule">
     </div>
-    <div class="panel lock">
-      <div class="head"><div class="logo emilia"><svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><rect x="9" y="6" width="5" height="28" fill="#b8913a"/><rect x="14" y="6" width="17" height="5" fill="#f4f4f4"/><rect x="14" y="17.5" width="14" height="5" fill="#b8913a"/><rect x="14" y="29" width="17" height="5" fill="#f4f4f4"/></svg></div><h3>Lock 2 · Authorize the action</h3></div>
-      <p>Two of three approvers sign an EMILIA receipt for this exact action and target. It expires quickly and works once. A missing signature, a changed action, or a replay is refused.</p>
+    <div class="boundary" id="boundary">
+      <p><b>Real in this run: </b>receipt verification, quorum counting, replay protection.</p>
     </div>
-    <div class="panel lock">
-      <div class="head"><div class="logo"><svg viewBox="0 0 52 52" width="50" height="50" aria-hidden="true"><circle cx="26" cy="26" r="24" fill="#0e7a5f"/><circle cx="26" cy="26" r="20" fill="#c4e08a"/><circle cx="26" cy="26" r="16.5" fill="#8dc63f"/><g stroke="#c4e08a" stroke-width="1.6"><line x1="26" y1="10" x2="26" y2="42"/><line x1="10" y1="26" x2="42" y2="26"/><line x1="14.5" y1="14.5" x2="37.5" y2="37.5"/><line x1="37.5" y1="14.5" x2="14.5" y2="37.5"/></g><circle cx="26" cy="23" r="4.5" fill="#111"/><path d="M23.5 25 L22 35 H30 L28.5 25 Z" fill="#111"/></svg></div><h3>Lock 3 · Attest the node</h3></div>
-      <p>Keylime must report a fresh PASS (under 30 seconds old) for the intended machine. The job's bytes must match the approved fingerprints, and IMA catches unapproved programs.</p>
-    </div>
-  </div>
+  </header>
 
-  <div class="boundary" id="boundary"><p>Loading…</p></div>
+  <nav class="nav-tabs" aria-label="View sections">
+    <button type="button" class="nav-tab active" data-tab="all">All</button>
+    <button type="button" class="nav-tab" data-tab="gate">Live Gate</button>
+    <button type="button" class="nav-tab" data-tab="anatomy">Receipt Breakdown</button>
+    <button type="button" class="nav-tab" data-tab="trace">Tracing in Jaeger</button>
+    <button type="button" class="nav-tab" data-tab="locks">Three Locks</button>
+    <button type="button" class="nav-tab" data-tab="audit">Audit &amp; Raw JSON</button>
+  </nav>
 
-  <div class="panel pipeline">
-    <svg viewBox="0 0 1000 250" role="img" aria-labelledby="pipeline-title">
-      <title id="pipeline-title">Request pipeline from the sandboxed agent to the workload</title>
-      <line class="track" x1="100" y1="200" x2="900" y2="200"></line>
-      <g id="stations"></g>
-      <g id="token"><circle cx="100" cy="200" r="11" fill="#4da3ff"></circle><circle cx="100" cy="200" r="5" fill="#05070c"></circle></g>
-      <text id="caption" x="500" y="240" text-anchor="middle">Approve, then send a request.</text>
-    </svg>
-  </div>
-
-  <div class="controls">
-    <div class="panel group">
-      <div class="label">Approvers · 2 of 3 needed</div>
+  <div class="action-bar" id="controls-bar">
+    <div class="action-group">
+      <span class="label">Quorum (2 of 3):</span>
       <button data-approve="operator">Approve as operator</button>
       <button data-approve="security">Approve as security</button>
       <button data-approve="reviewer">Approve as reviewer</button>
     </div>
-    <div class="panel group">
-      <div class="label">Requests</div>
+    <div class="action-group">
+      <span class="label">Scenarios:</span>
       <button data-execute="missing">Try without receipt</button>
       <button data-execute="tampered">Try altered target</button>
       <button data-execute="approved">Run approved workload</button>
@@ -175,53 +562,158 @@
     </div>
   </div>
 
-  <div class="panel result" id="result" aria-live="polite">
-    <div><strong id="result-title">No request yet</strong><span class="detail" id="result-detail">Try a request without approvals first: it should be refused.</span></div>
-    <span class="pill" id="stopped" hidden></span>
-    <div class="diff" id="diff" hidden></div>
+  <div class="workspace-grid" id="workspace">
+    <!-- Left / Primary column: Live Pipeline + Verdict -->
+    <section class="view-section" data-section="gate">
+      <div class="panel pipeline">
+        <svg viewBox="0 0 1000 245" role="img" aria-labelledby="pipeline-title">
+          <title id="pipeline-title">Request pipeline from the confined agent to the workload</title>
+          <line class="track" x1="100" y1="196" x2="900" y2="196"></line>
+          <g id="stations"></g>
+          <g id="token"><circle cx="100" cy="196" r="10" fill="#4da3ff"></circle><circle cx="100" cy="196" r="4" fill="#05070c"></circle></g>
+          <text id="caption" x="500" y="234" text-anchor="middle">Prove 2-of-3 approval for one exact action, then run end to end.</text>
+        </svg>
+      </div>
+
+      <div class="panel result" id="result" aria-live="polite">
+        <div>
+          <strong id="result-title">Ready</strong>
+          <span class="detail" id="result-detail">The confined agent wrote one request file. The watcher recomputed IDs and digests.</span>
+        </div>
+        <span class="pill" id="stopped" hidden></span>
+        <div class="diff" id="diff" hidden></div>
+      </div>
+    </section>
+
+    <!-- Right column in 'All' view / Standalone in 'Receipt Breakdown' tab (Slide 8) -->
+    <section class="view-section" data-section="anatomy">
+      <div class="section-title">
+        <h2>Receipt Breakdown</h2>
+      </div>
+      <div class="receipt-slide-grid">
+        <div class="card">
+          <div class="cap">1 · Canonical action (computed by the watcher)</div>
+          <dl class="kv" id="action-kv">
+            <dt>action_type</dt><dd>workload.execute</dd>
+            <dt>operation</dt><dd>checksum.sha256</dd>
+            <dt>target</dt><dd>aws-keylime-demo-01</dd>
+            <dt>artifact</dt><dd>sha256:b709d16d…7a12</dd>
+            <dt>input</dt><dd>sha256:79716dd5…a4b3</dd>
+            <dt>occurrence</dt><dd>28a79506-…-411fb96f2650</dd>
+            <dt>policy</dt><dd>demo-2.1</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="card">
+            <div class="cap">2 · Action hash</div>
+            <div class="hash" id="action-hash">sha256:fd48857e…d7ccec</div>
+          </div>
+          <div class="card">
+            <div class="cap">3 · Quorum: 2 of 3 approvers</div>
+            <div id="signers">
+              <div class="signer"><span class="c">–</span>ep:approver:operator<span class="s">waiting</span></div>
+              <div class="signer"><span class="c">–</span>ep:approver:security<span class="s">waiting</span></div>
+              <div class="signer"><span class="c">–</span>ep:approver:reviewer<span class="s">waiting</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">4 · Receipt signature</div>
+            <div class="hash" id="receipt-line">Not issued</div>
+          </div>
+        </div>
+        <div class="receipt-notes">
+          <p><b>Change any field</b> and the hash no longer matches: refused as <code>action_hash_mismatch</code>.</p>
+          <p><b>Present it twice</b> and the dispatcher's durable store refuses it: <code>replay_refused</code>, even after a restart.</p>
+          <p><b>One signature</b> is not a receipt: the request stays pending.</p>
+        </div>
+      </div>
+    </section>
   </div>
 
-  <h2>Trace timeline</h2>
-  <hr class="rule">
-  <p class="lede">The same request as a trace, in the style of Jaeger and OpenTelemetry. Each bar is one step, placed by its real start time and drawn to its real duration. Pick a request from this session, or a recorded run on AWS.</p>
-  <div class="panel trace">
-    <div class="trace-top"><span class="brand">TRACE VIEW</span><span class="otel" title="OpenTelemetry colors"><i style="background:#425cc7"></i><i style="background:#f5a800"></i></span><span style="color:var(--muted);font-size:13px">Jaeger-style, rendered in the page</span></div>
-    <div class="trace-pick" id="trace-pick"></div>
-    <div class="trace-meta" id="trace-meta"></div>
-    <div class="trace-body" id="trace-body"><div class="empty">No request yet. Send one, or open a recorded AWS run.</div></div>
-  </div>
+  <!-- Slide 11: Tracing the Full Run in Jaeger -->
+  <section class="view-section" data-section="trace">
+    <div class="panel trace">
+      <div class="trace-top">
+        <div class="trace-top-left">
+          <span class="brand">Tracing the Full Run in Jaeger</span>
+          <span class="otel" title="OpenTelemetry"><i style="background:#425cc7"></i><i style="background:#f5a800"></i></span>
+        </div>
+        <span style="color:var(--muted);font-size:13px">Refusals stop in milliseconds; approved requests take ~1.2 s</span>
+      </div>
+      <div class="trace-pick" id="trace-pick"></div>
+      <div class="trace-meta" id="trace-meta"></div>
+      <div class="trace-body" id="trace-body"><div class="empty">Select a session request or recorded AWS run above.</div></div>
+    </div>
+  </section>
 
-  <div class="two" style="margin-top:28px">
-    <div>
-      <h2 style="margin-top:0">Anatomy of the receipt</h2>
-      <hr class="rule">
-      <div class="panel anatomy">
-        <div class="card"><div class="cap">1 · Canonical action (computed by the watcher)</div><dl class="kv" id="action-kv"></dl></div>
-        <div class="card"><div class="cap">2 · Action hash</div><div class="hash" id="action-hash"></div></div>
-        <div class="card"><div class="cap">3 · Quorum: 2 of 3 approvers</div><div id="signers"></div></div>
-        <div class="card"><div class="cap">4 · Receipt</div><div class="hash" id="receipt-line">Not issued</div></div>
+  <!-- Slide 2 & Slide 10: Three Locks + What stops each attempt we tested -->
+  <section class="view-section" data-section="locks" hidden>
+    <div class="locks">
+      <div class="lock">
+        <div class="over">Confine the agent</div>
+        <div class="head">
+          <div class="logo nono">nono: &gt;..</div>
+          <h3>Lock 1: nono confinement</h3>
+        </div>
+        <p>The agent can write one request file to a write-only outbox. It cannot read the outbox, reach the network, call the executor, or access signing keys.</p>
+        <p>The watcher computes the request ID, digests, and policy version independently.</p>
+      </div>
+      <div class="lock">
+        <div class="over">Authorize the action</div>
+        <div class="head">
+          <div class="logo emilia"><svg viewBox="0 0 40 40" width="32" height="32" aria-hidden="true"><rect x="9" y="6" width="5" height="28" fill="#b8913a"/><rect x="14" y="6" width="17" height="5" fill="#f4f4f4"/><rect x="14" y="17.5" width="14" height="5" fill="#b8913a"/><rect x="14" y="29" width="17" height="5" fill="#f4f4f4"/></svg></div>
+          <h3>Lock 2: EMILIA authorization</h3>
+        </div>
+        <p>Two of three approvers sign a receipt for the exact action. The receipt binds the action and target, expires quickly, and can be used once.</p>
+        <p>A missing signature, changed action, expired receipt, or replay is denied.</p>
+      </div>
+      <div class="lock">
+        <div class="over">Attest the node</div>
+        <div class="head">
+          <div class="logo"><svg viewBox="0 0 52 52" width="46" height="46" aria-hidden="true"><circle cx="26" cy="26" r="24" fill="#0e7a5f"/><circle cx="26" cy="26" r="20" fill="#c4e08a"/><circle cx="26" cy="26" r="16.5" fill="#8dc63f"/><g stroke="#c4e08a" stroke-width="1.6"><line x1="26" y1="10" x2="26" y2="42"/><line x1="10" y1="26" x2="42" y2="26"/><line x1="14.5" y1="14.5" x2="37.5" y2="37.5"/><line x1="37.5" y1="14.5" x2="14.5" y2="37.5"/></g><circle cx="26" cy="23" r="4.5" fill="#111"/><path d="M23.5 25 L22 35 H30 L28.5 25 Z" fill="#111"/></svg></div>
+          <h3>Lock 3: Keylime attestation</h3>
+        </div>
+        <p>The target must return a fresh Keylime PASS for the intended node. The workload and input bytes must match approved digests.</p>
+        <p>Execution uses verified file descriptors. Missing, stale, or failed attestation denies the request.</p>
       </div>
     </div>
-    <div>
-      <h2 style="margin-top:0">What happened</h2>
-      <hr class="rule">
-      <div class="panel logpanel"><ol id="log"></ol></div>
-    </div>
-  </div>
 
-  <details>
-    <summary>Show raw details (approved action, last response, audit events)</summary>
-    <pre id="raw-action"></pre>
-    <pre id="raw-result">No request yet.</pre>
-    <pre id="raw-events"></pre>
-  </details>
+    <div class="stops-wrap">
+      <div class="subhead">What stops each attempt we tested</div>
+      <table class="stops-table">
+        <thead>
+          <tr><th>The agent or attacker tries to…</th><th>Stopped by</th><th>Recorded outcome</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Call the executor or Gate directly</td><td><span class="pill nono">nono</span></td><td>blocked, no network · <code>integration-nono</code></td></tr>
+          <tr><td>Read signer keys or the receipt store</td><td><span class="pill nono">nono</span></td><td>blocked · <code>integration-nono</code></td></tr>
+          <tr><td>Run with no approval, or only one</td><td><span class="pill emilia">EMILIA quorum</span></td><td>HTTP 428, pending · <code>end-to-end</code></td></tr>
+          <tr><td>Change the action after approval</td><td><span class="pill emilia">EMILIA action hash</span></td><td><code>action_hash_mismatch</code> · <code>end-to-end</code></td></tr>
+          <tr><td>Reuse a receipt, even after a restart</td><td><span class="pill emilia">Durable receipt store</span></td><td><code>replay_refused</code> · <code>authorization</code></td></tr>
+          <tr><td>Run on the wrong machine</td><td><span class="pill keylime">Keylime target binding</span></td><td>denied · <code>attestation</code></td></tr>
+          <tr><td>Run while attestation is unavailable</td><td><span class="pill keylime">Keylime, fails closed</span></td><td>HTTP 500, did not run · <code>end-to-end</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Audit Log & Raw JSON -->
+  <section class="view-section" data-section="audit" hidden>
+    <div class="audit-grid">
+      <div class="logpanel">
+        <div class="subhead">Recorded events</div>
+        <ol id="log"></ol>
+      </div>
+      <div class="raw-stack">
+        <pre id="raw-action"></pre>
+        <pre id="raw-result">No request yet.</pre>
+        <pre id="raw-events"></pre>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script type="module">
-  import {
-    STATIONS, boundaryNote, describeEvent, describeResponse, stoppedBy, traceFromEvents, traceFromJaeger,
-  } from '/demo-view.js';
-
   const SVG = 'http://www.w3.org/2000/svg';
   const X = [100, 300, 500, 700, 900];
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -236,13 +728,41 @@
   let state = null;
   let selectedTrace = null;
 
-  // Each station wears its technology's colors; pass/fail is a badge.
+  // Wire up horizontal Google-style tab switching immediately so it works even offline.
+  const workspace = $('#workspace');
+  const controlsBar = $('#controls-bar');
+  const sections = document.querySelectorAll('.view-section');
+  for (const tab of document.querySelectorAll('.nav-tab')) {
+    tab.addEventListener('click', () => {
+      for (const other of document.querySelectorAll('.nav-tab')) other.classList.toggle('active', other === tab);
+      const target = tab.dataset.tab;
+      workspace.classList.toggle('single-col', target !== 'all');
+      controlsBar.hidden = (target === 'locks' || target === 'audit');
+      for (const section of sections) {
+        if (target === 'all') {
+          section.hidden = (section.dataset.section === 'locks' || section.dataset.section === 'audit');
+        } else {
+          section.hidden = section.dataset.section !== target;
+        }
+      }
+    });
+  }
+
+  const DEFAULT_STATIONS = [
+    { id: 'agent', title: 'Agent', subtitle: 'in nono sandbox' },
+    { id: 'approvals', title: 'Approvals', subtitle: '2 of 3 needed' },
+    { id: 'gate', title: 'Receipt gate', subtitle: '7 checks' },
+    { id: 'keylime', title: 'Keylime', subtitle: 'node health' },
+    { id: 'job', title: 'Workload', subtitle: 'not run' },
+  ];
+
+  // Flat station boxes with sharp corners (rx=2) and technology colors from the slideshow.
   const THEMES = [
-    { fill: '#000000', stroke: '#3a3a3a', tag: 'nono', tagColor: '#f2a65a', title: '#ffffff', sub: '#b9b9b9' },
-    { fill: '#0f1626', stroke: '#b8913a', tag: 'EMILIA', tagColor: '#b8913a', title: '#f4e7c6', sub: '#c9b78a' },
-    { fill: '#0f1626', stroke: '#b8913a', tag: 'EMILIA', tagColor: '#b8913a', title: '#f4e7c6', sub: '#c9b78a' },
-    { fill: '#0c2a12', stroke: '#8dc63f', tag: 'Keylime', tagColor: '#c4e08a', title: '#e6f4cf', sub: '#a9cf7a' },
-    { fill: '#232f3e', stroke: '#ff9900', tag: 'AWS', tagColor: '#ff9900', title: '#ffffff', sub: '#c9d1dc' },
+    { fill: '#080b10', stroke: '#3a3a3a', tag: 'nono', tagColor: '#f2a65a', title: '#ffffff', sub: '#b9b9b9' },
+    { fill: '#0b111e', stroke: '#b8913a', tag: 'Emilia', tagColor: '#b8913a', title: '#f4e7c6', sub: '#c9b78a' },
+    { fill: '#0b111e', stroke: '#b8913a', tag: 'Emilia', tagColor: '#b8913a', title: '#f4e7c6', sub: '#c9b78a' },
+    { fill: '#091c0e', stroke: '#8dc63f', tag: 'Keylime', tagColor: '#c4e08a', title: '#e6f4cf', sub: '#a9cf7a' },
+    { fill: '#151d28', stroke: '#ff9900', tag: 'AWS', tagColor: '#ff9900', title: '#ffffff', sub: '#c9d1dc' },
   ];
 
   function svg(name, attributes, parent) {
@@ -252,23 +772,41 @@
     return node;
   }
 
+  let viewModule = null;
+  try {
+    viewModule = await import('/demo-view.js');
+  } catch {
+    viewModule = {
+      STATIONS: DEFAULT_STATIONS,
+      boundaryNote: () => ({ real: 'Real: receipt verification, quorum counting, replay protection.', simulated: [] }),
+      describeEvent: () => null,
+      describeResponse: () => null,
+      stoppedBy: () => null,
+      traceFromEvents: () => [],
+      traceFromJaeger: () => null,
+    };
+  }
+  const {
+    STATIONS, boundaryNote, describeEvent, describeResponse, stoppedBy, traceFromEvents, traceFromJaeger,
+  } = viewModule;
+
   const stations = STATIONS.map((station, index) => {
     const theme = THEMES[index];
     const group = svg('g', { class: 'st' }, $('#stations'));
-    svg('rect', { class: 'box', x: X[index] - 88, y: 40, width: 176, height: 118, rx: 12, fill: theme.fill, stroke: theme.stroke }, group);
-    const tag = svg('text', { class: 'tag', x: X[index], y: 66, 'text-anchor': 'middle', fill: theme.tagColor }, group);
+    svg('rect', { class: 'box', x: X[index] - 88, y: 36, width: 176, height: 118, rx: 2, fill: theme.fill, stroke: theme.stroke }, group);
+    const tag = svg('text', { class: 'tag', x: X[index], y: 62, 'text-anchor': 'middle', fill: theme.tagColor }, group);
     tag.textContent = theme.tag;
-    svg('text', { class: 'title', x: X[index], y: 96, 'text-anchor': 'middle', fill: theme.title }, group).textContent = station.title;
-    const sub = svg('text', { class: 'sub', x: X[index], y: 120, 'text-anchor': 'middle', fill: theme.sub }, group);
+    svg('text', { class: 'title', x: X[index], y: 92, 'text-anchor': 'middle', fill: theme.title }, group).textContent = station.title;
+    const sub = svg('text', { class: 'sub', x: X[index], y: 116, 'text-anchor': 'middle', fill: theme.sub }, group);
     sub.textContent = station.subtitle;
     const badge = svg('g', { class: 'badge' }, group);
-    const circle = svg('circle', { cx: X[index] + 78, cy: 46, r: 13, fill: '#3ddc97', stroke: '#05070c', 'stroke-width': 3 }, badge);
-    const mark = svg('text', { x: X[index] + 78, y: 51, 'text-anchor': 'middle', fill: '#05070c', 'font-size': 15, 'font-weight': 700 }, badge);
+    const circle = svg('circle', { cx: X[index] + 78, cy: 42, r: 12, fill: '#3ddc97', stroke: '#05070c', 'stroke-width': 2.5 }, badge);
+    const mark = svg('text', { x: X[index] + 78, y: 47, 'text-anchor': 'middle', fill: '#05070c', 'font-size': 14, 'font-weight': 700 }, badge);
     mark.textContent = '✓';
     return { group, sub, tag, badge, circle, mark, base: station.subtitle };
   });
   const approverDots = ['operator', 'security', 'reviewer'].map((role, index) => (
-    svg('circle', { class: 'approver', cx: 278 + index * 22, cy: 140, r: 7, fill: '#0f1626', stroke: '#b8913a', 'data-role': role }, stations[1].group)
+    svg('circle', { class: 'approver', cx: 278 + index * 22, cy: 136, r: 6, fill: '#0b111e', stroke: '#b8913a', 'data-role': role }, stations[1].group)
   ));
 
   function setStation(index, tone, text) {
@@ -309,13 +847,13 @@
       const status = signed ? 'signed'
         : (snapshot.receipt_ready ? 'not needed' : (snapshot.approvals.includes(role) ? 'approved' : 'waiting'));
       return el('div', { className: `signer${signed ? ' signed' : ''}` },
-        el('span', { className: 'c', textContent: signed ? '✓' : '' }),
+        el('span', { className: 'c', textContent: signed ? '✓' : '–' }),
         `ep:approver:${role}`, el('span', { className: 's', textContent: status }));
     }));
     const used = snapshot.events.some((event) => event.stage === 'receipt-guard' && event.decision === 'invoke');
     $('#receipt-line').textContent = snapshot.receipt_ready
-      ? `${snapshot.receipt_id} · Ed25519 · EP-RECEIPT-v1 · ${used ? 'used once' : 'unused'}`
-      : 'Not issued: two approvals needed';
+      ? `Ed25519 · EP-RECEIPT-v1 · ${snapshot.receipt_id} · ${used ? 'used once' : 'unused'}`
+      : 'One signature is not a receipt: two approvals needed';
   }
 
   function renderLog(snapshot) {
@@ -330,13 +868,13 @@
   function renderStatic(snapshot) {
     renderBoundary(snapshot);
     stations[3].base = snapshot.keylime_mode === 'remote-mcp' ? 'AWS node' : 'local stand-in';
-    stations[4].tag.textContent = snapshot.keylime_mode === 'remote-mcp' ? 'AWS' : 'LOCAL';
+    stations[4].tag.textContent = snapshot.keylime_mode === 'remote-mcp' ? 'AWS' : 'Local';
     if (!stations[3].tone) stations[3].sub.textContent = stations[3].base;
     setStation(0, 'ok', 'request ready');
     setStation(1, snapshot.receipt_ready ? 'ok' : '', snapshot.receipt_ready
       ? 'receipt issued' : `${Math.min(snapshot.approvals.length, 2)} of 2 approvals`);
     for (const dot of approverDots) {
-      dot.setAttribute('fill', snapshot.approvals.includes(dot.dataset.role) ? '#b8913a' : '#0f1626');
+      dot.setAttribute('fill', snapshot.approvals.includes(dot.dataset.role) ? '#b8913a' : '#0b111e');
     }
     for (const button of document.querySelectorAll('[data-approve]')) {
       button.classList.toggle('done', snapshot.approvals.includes(button.dataset.approve));
@@ -420,7 +958,7 @@
       ` · ${trace.spans.length} spans · depth ${Math.max(...trace.spans.map((span) => span.depth)) + 1}`,
     );
     const tickValues = [0, 0.25, 0.5, 0.75, 1];
-    const axis = el('div', { className: 'axis' }, el('span', { textContent: 'Service and operation' }),
+    const axis = el('div', { className: 'axis' }, el('span', { textContent: 'Service & Operation' }),
       el('div', { className: 'ticks' }, ...tickValues.map((t) => el('span', { textContent: formatDuration(total * t), style: `left:${t * 100}%` }))));
     const rootService = trace.spans.find((span) => span.depth === 0)?.service;
     const rows = trace.spans.map((span) => {
@@ -429,7 +967,6 @@
       const color = spanColor(span);
       const bar = el('div', { className: `bar${span.tone === 'bad' ? ' err' : ''}`, style: `left:${left}%;background:${color}` });
       bar.dataset.width = `${width}%`;
-      // Labels sit right of the bar, or left of it when the bar reaches the edge.
       const label = `${formatDuration(span.end - span.start)}${span.note ? ` · ${span.note}` : ''}`;
       let position = `left:${left + width + 0.6}%`;
       if (left + width > 72) {
@@ -446,7 +983,6 @@
       return { row: el('div', { className: 'row' }, op, lane), bar, dur, offset: (span.start - trace.start) / total };
     });
     $('#trace-body').replaceChildren(axis, ...rows.map((entry) => entry.row));
-    // Grow each bar in start-time order, like the run unfolding.
     requestAnimationFrame(() => {
       for (const entry of rows) {
         const delay = reduceMotion ? 0 : Math.round(entry.offset * 1400);
@@ -543,9 +1079,14 @@
     });
   }
 
-  state = await (await fetch('/api/state')).json();
-  renderStatic(state);
-  renderTracePicker(state);
+  try {
+    state = await (await fetch('/api/state')).json();
+    renderStatic(state);
+    renderTracePicker(state);
+  } catch {
+    setStation(0, 'ok', 'request ready');
+    renderTracePicker({ events: [], keylime_mode: 'local-stand-in' });
+  }
 </script>
 </body>
 </html>
