@@ -70,6 +70,7 @@ export async function startDemoServer(options) {
     stateDirectory,
   });
   const html = await readFile(path.join(repository, 'public', 'demo.html'));
+  const viewModule = await readFile(path.join(moduleDirectory, 'demo_view.mjs'));
   const server = createServer(async (request, response) => {
     try {
       if (request.method === 'GET' && request.url === '/') {
@@ -81,6 +82,16 @@ export async function startDemoServer(options) {
           'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
         });
         response.end(html);
+        return;
+      }
+      if (request.method === 'GET' && request.url === '/demo-view.js') {
+        response.writeHead(200, {
+          'Content-Type': 'text/javascript; charset=utf-8',
+          'Content-Length': viewModule.length,
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        response.end(viewModule);
         return;
       }
       if (request.method === 'GET' && request.url === '/api/state') {

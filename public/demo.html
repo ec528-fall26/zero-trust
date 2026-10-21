@@ -5,86 +5,288 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EC528 Zero-Trust Demo</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #17202a; }
-    h1 { margin-bottom: .25rem; }
-    .warning { background: #fff4ce; border: 1px solid #d6b656; padding: .8rem; }
-    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; margin: 1.2rem 0; }
-    .stage { border: 1px solid #aeb6bf; padding: .8rem; min-height: 5rem; }
-    .ok { border-color: #198754; background: #effaf3; }
-    button { padding: .55rem .8rem; margin: .2rem; cursor: pointer; }
-    button:disabled { cursor: not-allowed; opacity: .5; }
-    pre { background: #f4f6f7; padding: .8rem; overflow: auto; max-height: 22rem; }
-    code { overflow-wrap: anywhere; }
-    @media (max-width: 700px) { .flow { grid-template-columns: 1fr; } }
+    :root {
+      --bg: #fafaf8; --card: #ffffff; --text: #1f1f1d; --muted: #5f5e5a; --line: #d3d1c7;
+      --ok-bg: #e1f5ee; --ok-line: #0f6e56; --ok-text: #085041;
+      --bad-bg: #fcebeb; --bad-line: #a32d2d; --bad-text: #791f1f;
+      --note-bg: #faeeda; --note-line: #ba7517; --note-text: #633806;
+      --token: #378add; --dot: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1b1b1a; --card: #262624; --text: #ecebe5; --muted: #b4b2a9; --line: #444441;
+        --ok-bg: #085041; --ok-line: #5dcaa5; --ok-text: #e1f5ee;
+        --bad-bg: #791f1f; --bad-line: #f09595; --bad-text: #fcebeb;
+        --note-bg: #633806; --note-line: #ef9f27; --note-text: #faeeda;
+        --dot: #262624;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 system-ui, -apple-system, sans-serif; }
+    main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 48px; }
+    h1 { font-size: 30px; font-weight: 600; margin: 0; }
+    h2 { font-size: 18px; font-weight: 600; margin: 28px 0 10px; }
+    .lede { color: var(--muted); margin: 4px 0 18px; }
+    .note { background: var(--note-bg); color: var(--note-text); border: 1px solid var(--note-line); border-radius: 10px; padding: 10px 14px; font-size: 15px; }
+    .note p { margin: 2px 0; }
+    .pipeline { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-top: 18px; padding: 8px 8px 0; }
+    svg { display: block; width: 100%; height: auto; }
+    .station rect { fill: var(--card); stroke: var(--line); stroke-width: 1.5; transition: fill .35s, stroke .35s; }
+    .station.ok rect { fill: var(--ok-bg); stroke: var(--ok-line); }
+    .station.bad rect { fill: var(--bad-bg); stroke: var(--bad-line); }
+    .station .title { font-size: 19px; font-weight: 600; fill: var(--text); }
+    .station .sub { font-size: 15px; fill: var(--muted); }
+    .station.ok .title, .station.ok .sub { fill: var(--ok-text); }
+    .station.bad .title, .station.bad .sub { fill: var(--bad-text); }
+    .approver { fill: var(--dot); stroke: var(--line); stroke-width: 1.5; transition: fill .35s, stroke .35s; }
+    .approver.on { fill: var(--ok-line); stroke: var(--ok-line); }
+    .track { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 6; }
+    #token { transition: transform .5s cubic-bezier(.4, 0, .2, 1), opacity .25s; opacity: 0; }
+    #token circle { fill: var(--token); }
+    #caption { font-size: 16px; fill: var(--muted); }
+    @media (prefers-reduced-motion: reduce) { #token, .station rect, .approver { transition: none; } }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+    .group { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+    .group h2 { margin: 0 0 10px; }
+    button { font: inherit; font-size: 16px; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 9px 14px; margin: 4px 6px 4px 0; cursor: pointer; }
+    button:hover { border-color: var(--muted); }
+    button.done { border-color: var(--ok-line); color: var(--ok-text); background: var(--ok-bg); }
+    .result { border-radius: 14px; border: 1px solid var(--line); background: var(--card); padding: 16px 18px; margin-top: 18px; min-height: 92px; }
+    .result.ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-text); }
+    .result.bad { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-text); }
+    .result strong { display: block; font-size: 22px; font-weight: 600; }
+    .diff { margin-top: 8px; font-size: 15px; }
+    .diff code { font-size: 14px; }
+    ol#log { list-style: none; padding: 0; margin: 0; }
+    #log li { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+    #log time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 10px; }
+    details { margin-top: 22px; }
+    summary { cursor: pointer; color: var(--muted); }
+    pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; max-height: 22rem; font-size: 13px; }
+    @media (max-width: 760px) { .controls { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <h1>Zero-Trust Workload Demo</h1>
-  <p>Nono → EMILIA receipt → Keylime attestation → workload</p>
-  <p class="warning"><strong>Demo boundary:</strong> receipt verification and replay protection are real. Human signing keys and Keylime are local stand-ins until the team services are connected.</p>
+<main>
+  <h1>Zero-trust workload demo</h1>
+  <p class="lede">An AI agent can ask for a job, but it only runs if two people approve that exact request and the cloud machine proves it's healthy.</p>
+  <div class="note" id="boundary"><p id="boundary-real">Loading…</p></div>
 
-  <div class="flow">
-    <div class="stage ok"><strong>1. Nono</strong><p>Restricted request ingested.</p></div>
-    <div class="stage" id="emilia"><strong>2. EMILIA</strong><p id="approval-status">0 / 2 approvals</p></div>
-    <div class="stage" id="guard"><strong>3. Receipt guard</strong><p id="receipt-status">Receipt not issued</p></div>
-    <div class="stage" id="keylime"><strong>4. Keylime</strong><p id="execution-status">Not executed</p></div>
+  <div class="pipeline">
+    <svg viewBox="0 0 1000 230" role="img" aria-labelledby="pipeline-title">
+      <title id="pipeline-title">Request pipeline from the sandboxed agent to the workload</title>
+      <line class="track" x1="100" y1="182" x2="900" y2="182"></line>
+      <g id="stations"></g>
+      <g id="token"><circle cx="100" cy="182" r="12"></circle></g>
+      <text id="caption" x="500" y="220" text-anchor="middle">Approve, then send a request.</text>
+    </svg>
   </div>
 
-  <h2>Approval</h2>
-  <button data-approve="operator">Approve as operator</button>
-  <button data-approve="security">Approve as security</button>
-  <button data-approve="reviewer">Approve as reviewer</button>
+  <div class="controls">
+    <div class="group">
+      <h2>Approvers (2 of 3 needed)</h2>
+      <button data-approve="operator">Approve as operator</button>
+      <button data-approve="security">Approve as security</button>
+      <button data-approve="reviewer">Approve as reviewer</button>
+    </div>
+    <div class="group">
+      <h2>Requests</h2>
+      <button data-execute="missing">Try without receipt</button>
+      <button data-execute="tampered">Try altered target</button>
+      <button data-execute="approved">Run approved workload</button>
+      <button data-execute="replay">Replay receipt</button>
+    </div>
+  </div>
 
-  <h2>Security checks</h2>
-  <button data-execute="missing">Try without receipt</button>
-  <button data-execute="tampered" disabled>Try altered target</button>
-  <button data-execute="approved" disabled>Run approved workload</button>
-  <button data-execute="replay" disabled>Replay receipt</button>
+  <div class="result" id="result" aria-live="polite"><strong id="result-title">No request yet</strong><span id="result-detail">Try a request without approvals first: it should be refused.</span><div class="diff" id="diff" hidden></div></div>
 
-  <h2>Exact approved action</h2>
-  <pre id="action"></pre>
-  <h2>Latest result</h2>
-  <pre id="result">No request yet.</pre>
-  <h2>Audit events</h2>
-  <pre id="events"></pre>
+  <h2>What happened</h2>
+  <ol id="log"></ol>
 
-  <script>
-    async function call(path, body) {
-      const response = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const value = await response.json();
-      if (!response.ok) throw new Error(value.error || 'request failed');
-      render(value);
+  <details>
+    <summary>Show raw details (approved action, last response, audit events)</summary>
+    <h2>Exact approved action</h2>
+    <pre id="raw-action"></pre>
+    <h2>Last response</h2>
+    <pre id="raw-result">No request yet.</pre>
+    <h2>Audit events</h2>
+    <pre id="raw-events"></pre>
+  </details>
+</main>
+
+<script type="module">
+  import { STATIONS, boundaryNote, describeEvent, describeResponse } from '/demo-view.js';
+
+  const SVG = 'http://www.w3.org/2000/svg';
+  const X = [100, 300, 500, 700, 900];
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : ms));
+  const $ = (selector) => document.querySelector(selector);
+  let busy = false;
+  let state = null;
+
+  function svg(name, attributes, parent) {
+    const node = document.createElementNS(SVG, name);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+    if (parent) parent.append(node);
+    return node;
+  }
+
+  const stations = STATIONS.map((station, index) => {
+    const group = svg('g', { class: 'station', id: `station-${station.id}` }, $('#stations'));
+    svg('rect', { x: X[index] - 88, y: 40, width: 176, height: 104, rx: 12 }, group);
+    svg('text', { class: 'title', x: X[index], y: 78, 'text-anchor': 'middle' }, group).textContent = station.title;
+    const sub = svg('text', { class: 'sub', x: X[index], y: 106, 'text-anchor': 'middle' }, group);
+    sub.textContent = station.subtitle;
+    return { group, sub, base: station.subtitle };
+  });
+  const approverDots = ['operator', 'security', 'reviewer'].map((role, index) => (
+    svg('circle', { class: 'approver', cx: 278 + index * 22, cy: 126, r: 7, 'data-role': role }, stations[1].group)
+  ));
+
+  function setStation(index, tone, text) {
+    stations[index].group.setAttribute('class', `station${tone ? ` ${tone}` : ''}`);
+    stations[index].sub.textContent = text ?? stations[index].base;
+  }
+
+  function placeToken(index, visible = true) {
+    $('#token').style.transform = `translateX(${X[index] - X[0]}px)`;
+    $('#token').style.opacity = visible ? '1' : '0';
+  }
+
+  function renderStatic(snapshot) {
+    const note = boundaryNote(snapshot);
+    $('#boundary').innerHTML = '';
+    const real = document.createElement('p');
+    real.textContent = note.real;
+    $('#boundary').append(real);
+    for (const line of note.simulated) {
+      const item = document.createElement('p');
+      item.textContent = `Simulated: ${line}`;
+      $('#boundary').append(item);
     }
+    stations[3].base = snapshot.keylime_mode === 'remote-mcp' ? 'AWS node' : 'local stand-in';
+    if (stations[3].group.getAttribute('class') === 'station') stations[3].sub.textContent = stations[3].base;
 
-    function render(state) {
-      document.querySelector('#approval-status').textContent = `${state.approvals.length} / ${state.required_approvals} approvals`;
-      document.querySelector('#receipt-status').textContent = state.receipt_ready ? `Receipt ready: ${state.receipt_id}` : 'Receipt not issued';
-      document.querySelector('#action').textContent = JSON.stringify({ ...state.action, action_hash: state.action_hash }, null, 2);
-      document.querySelector('#result').textContent = state.last_response ? JSON.stringify(state.last_response, null, 2) : 'No request yet.';
-      document.querySelector('#events').textContent = JSON.stringify(state.events, null, 2);
-      document.querySelector('#emilia').classList.toggle('ok', state.approvals.length >= 2);
-      document.querySelector('#guard').classList.toggle('ok', state.receipt_ready);
-      document.querySelector('#keylime').classList.toggle('ok', state.last_response?.status === 200);
-      document.querySelector('#execution-status').textContent = state.last_response?.status === 200 ? `Attested and executed once (${state.keylime_mode})` : `Not executed (${state.keylime_mode})`;
-      for (const button of document.querySelectorAll('[data-execute]')) {
-        if (button.dataset.execute !== 'missing') button.disabled = !state.receipt_ready;
-      }
-      for (const button of document.querySelectorAll('[data-approve]')) {
-        button.disabled = state.approvals.includes(button.dataset.approve);
-      }
+    setStation(0, 'ok', 'request ready');
+    const count = snapshot.approvals.length;
+    setStation(1, snapshot.receipt_ready ? 'ok' : '', snapshot.receipt_ready
+      ? 'receipt issued'
+      : `${Math.min(count, 2)} of 2 approvals`);
+    for (const dot of approverDots) {
+      dot.setAttribute('class', snapshot.approvals.includes(dot.dataset.role) ? 'approver on' : 'approver');
     }
-
     for (const button of document.querySelectorAll('[data-approve]')) {
-      button.addEventListener('click', () => call('/api/approve', { role: button.dataset.approve }).catch(alert));
+      button.classList.toggle('done', snapshot.approvals.includes(button.dataset.approve));
     }
-    for (const button of document.querySelectorAll('[data-execute]')) {
-      button.addEventListener('click', () => call('/api/execute', { mode: button.dataset.execute }).catch(alert));
+
+    const log = $('#log');
+    log.innerHTML = '';
+    for (const event of [...snapshot.events].reverse()) {
+      const text = describeEvent(event);
+      if (!text) continue;
+      const item = document.createElement('li');
+      const time = document.createElement('time');
+      time.textContent = new Date(event.at).toLocaleTimeString();
+      item.append(time, text);
+      log.append(item);
     }
-    fetch('/api/state').then((response) => response.json()).then(render).catch(alert);
-  </script>
+    $('#raw-action').textContent = JSON.stringify({ ...snapshot.action, action_hash: snapshot.action_hash }, null, 2);
+    $('#raw-result').textContent = snapshot.last_response ? JSON.stringify(snapshot.last_response, null, 2) : 'No request yet.';
+    $('#raw-events').textContent = JSON.stringify(snapshot.events, null, 2);
+  }
+
+  function showResult(view, mode, snapshot) {
+    const box = $('#result');
+    box.className = `result ${view.tone}`;
+    $('#result-title').textContent = view.title;
+    $('#result-detail').textContent = view.detail;
+    const diff = $('#diff');
+    if (mode === 'tampered' && view.reason === 'action_hash_mismatch') {
+      diff.hidden = false;
+      diff.innerHTML = '';
+      const approved = document.createElement('div');
+      approved.append('Approved target: ', Object.assign(document.createElement('code'), { textContent: snapshot.action.target }));
+      const requested = document.createElement('div');
+      requested.append('Requested target: ', Object.assign(document.createElement('code'), { textContent: `${snapshot.action.target}-tampered` }));
+      diff.append(approved, requested);
+    } else {
+      diff.hidden = true;
+    }
+  }
+
+  async function animate(view, mode, snapshot) {
+    for (const index of [2, 3, 4]) setStation(index, '', undefined);
+    $('#token').style.transition = 'none';
+    placeToken(0, true);
+    await wait(30);
+    $('#token').style.transition = '';
+    $('#caption').textContent = 'Request leaves the sandbox';
+    for (let index = 1; index <= view.stopAt; index += 1) {
+      placeToken(index, true);
+      await wait(550);
+      if (index === 2) setStation(2, view.stopAt > 2 || view.tone === 'ok' ? 'ok' : 'bad', view.gate);
+      if (index === 3) setStation(3, view.keylime === 'trusted' ? 'ok' : 'bad', view.keylime);
+      if (index === 4) setStation(4, 'ok', view.job);
+      if (index < view.stopAt) await wait(200);
+    }
+    if (view.stopAt === 3) setStation(4, 'bad', view.job);
+    $('#caption').textContent = view.title;
+    showResult(view, mode, snapshot);
+    await wait(700);
+    placeToken(view.stopAt, false);
+  }
+
+  async function post(path, body) {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || 'request failed');
+    return value;
+  }
+
+  function showError(message) {
+    const friendly = /two approvals are required/.test(message)
+      ? 'Approve twice first: this test needs a receipt.'
+      : message;
+    $('#result').className = 'result bad';
+    $('#result-title').textContent = 'Not sent';
+    $('#result-detail').textContent = friendly;
+    $('#diff').hidden = true;
+  }
+
+  for (const button of document.querySelectorAll('[data-approve]')) {
+    button.addEventListener('click', async () => {
+      try {
+        state = await post('/api/approve', { role: button.dataset.approve });
+        renderStatic(state);
+      } catch (error) {
+        showError(error.message);
+      }
+    });
+  }
+  for (const button of document.querySelectorAll('[data-execute]')) {
+    button.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        state = await post('/api/execute', { mode: button.dataset.execute });
+        renderStatic(state);
+        const view = describeResponse(state.last_response, state);
+        if (view) await animate(view, button.dataset.execute, state);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        busy = false;
+      }
+    });
+  }
+
+  state = await (await fetch('/api/state')).json();
+  renderStatic(state);
+</script>
 </body>
 </html>
