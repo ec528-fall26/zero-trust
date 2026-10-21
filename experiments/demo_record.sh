@@ -71,7 +71,10 @@ kill_tree() {
 
 cleanup() {
   local pid
-  for pid in "${background_pids[@]:-}"; do [ -n "$pid" ] && kill_tree "$pid"; done
+  for pid in "${background_pids[@]:-}"; do
+    if [ -n "$pid" ]; then kill_tree "$pid"; fi
+  done
+  return 0
 }
 trap cleanup EXIT INT TERM
 
