@@ -1,6 +1,7 @@
 .PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper jaeger trace-replay demo-record fetch-token ci
 
-PYTHON ?= python3
+# Prefer the project virtualenv (it has jsonschema) and fall back to python3.
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 check:
 	PYTHONPATH=src $(PYTHON) -m compileall -q src tests
