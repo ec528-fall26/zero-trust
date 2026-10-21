@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-end-to-end",
+  "status": "pass",
+  "generated_at": "2026-10-20T15:56:45.851Z",
+  "repository_revision": "459dace6295f33850817f4a1513ab224d215b2c1",
+  "repository_dirty": false,
+  "versions": {
+    "nono": "nono 0.79.0",
+    "node": "v24.11.0",
+    "keylime": "7.14.1-5.el10_2.1",
+    "swtpm": "0.9.0-5.el10",
+    "ami_id": "ami-0281f4b4279b17b5b",
+    "instance_type": "t3.small"
+  },
+  "tpm_type": "swtpm",
+  "instance_id": "i-073d4356a44dc991f",
+  "agent_uuid": "d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
+  "action": {
+    "action_type": "workload.execute",
+    "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
+    "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+    "occurrence_id": "69fca004-03a0-41e7-8366-4f667fdd378f",
+    "operation": "checksum.sha256",
+    "policy_version": "demo-2.1",
+    "target": "aws-keylime-demo-01"
+  },
+  "scenarios": [
+    {
+      "name": "no_receipt",
+      "expected": "denied",
+      "observed": {
+        "status": 428,
+        "reason": null,
+        "attestation_verdict": null,
+        "evidence_digest": null,
+        "workload_executed": null,
+        "workload_stdout_sha256": null
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:55:10.941Z",
+      "completed_at": "2026-10-20T15:55:10.945Z",
+      "raw_response_sha256": "sha256:71ea1f88dcba8910e9fa4cfa7b8f9e647099e14aa7d7285ed8b3c12044fc108a"
+    },
+    {
+      "name": "one_of_three_signatures",
+      "expected": "pending_and_denied",
+      "observed": {
+        "status": 428,
+        "reason": null,
+        "attestation_verdict": null,
+        "evidence_digest": null,
+        "workload_executed": null,
+        "workload_stdout_sha256": null
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:55:10.945Z",
+      "completed_at": "2026-10-20T15:55:10.946Z",
+      "raw_response_sha256": "sha256:71ea1f88dcba8910e9fa4cfa7b8f9e647099e14aa7d7285ed8b3c12044fc108a"
+    },
+    {
+      "name": "action_changed_after_approval",
+      "expected": "denied",
+      "observed": {
+        "status": 428,
+        "reason": "action_hash_mismatch",
+        "attestation_verdict": null,
+        "evidence_digest": null,
+        "workload_executed": null,
+        "workload_stdout_sha256": null
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:55:10.948Z",
+      "completed_at": "2026-10-20T15:55:10.950Z",
+      "raw_response_sha256": "sha256:403d2646c681ab00747e4448f03499145c57d4bf05aa1eb324d39e546b6d14fa"
+    },
+    {
+      "name": "exact_action_end_to_end",
+      "expected": "executed_once",
+      "observed": {
+        "status": 200,
+        "reason": null,
+        "attestation_verdict": "trusted",
+        "evidence_digest": "sha256:0b8afc40dc52f3798652f9b6507efdd8d8e243f88d399f2cc72bfe03ec322269",
+        "workload_executed": true,
+        "workload_stdout_sha256": "sha256:43cbd776fb84a1a217c92443c400876d62b8641628eafd5e3ebfaa6b997f8f1a"
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:55:10.950Z",
+      "completed_at": "2026-10-20T15:55:12.397Z",
+      "raw_response_sha256": "sha256:29911b2413ac4bfda68b8c44cde40d875657a860b0f9efa90e4c754ee89db5df"
+    },
+    {
+      "name": "used_receipt_replay",
+      "expected": "denied",
+      "observed": {
+        "status": 428,
+        "reason": "replay_refused",
+        "attestation_verdict": null,
+        "evidence_digest": null,
+        "workload_executed": null,
+        "workload_stdout_sha256": null
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:55:12.397Z",
+      "completed_at": "2026-10-20T15:55:12.399Z",
+      "raw_response_sha256": "sha256:06d516e24def819b2f2b9fac94ae09b364847ee12e40ce5143b434b96921880d"
+    },
+    {
+      "name": "keylime_agent_stopped",
+      "expected": "denied",
+      "observed": {
+        "status": 500,
+        "reason": "effect_indeterminate",
+        "attestation_verdict": null,
+        "evidence_digest": null,
+        "workload_executed": null,
+        "workload_stdout_sha256": null
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:55:48.270Z",
+      "completed_at": "2026-10-20T15:55:49.520Z",
+      "raw_response_sha256": "sha256:241fdc5cd0576b158354c5a5791f0db7ade9f37dcc4154cdeae38d79ac535e87"
+    },
+    {
+      "name": "keylime_agent_recovered",
+      "expected": "executed_once",
+      "observed": {
+        "status": 200,
+        "reason": null,
+        "attestation_verdict": "trusted",
+        "evidence_digest": "sha256:babaf15efd2d27b2e3b3f1704fe58712b832056f655a19ea4b30127e506e3089",
+        "workload_executed": true,
+        "workload_stdout_sha256": "sha256:43cbd776fb84a1a217c92443c400876d62b8641628eafd5e3ebfaa6b997f8f1a"
+      },
+      "passed": true,
+      "started_at": "2026-10-20T15:56:34.909Z",
+      "completed_at": "2026-10-20T15:56:36.185Z",
+      "raw_response_sha256": "sha256:b811ce1296db71496bbdf8b265052fae29e1d28662ffd6d761d0bae29f35508f"
+    }
+  ],
+  "timeline": [
+    {
+      "step": "nono_profile_generated",
+      "outcome": "success",
+      "at": "2026-10-20T15:55:07.610Z"
+    },
+    {
+      "step": "nono_agent_request_written",
+      "outcome": "success",
+      "at": "2026-10-20T15:55:07.758Z",
+      "request_id": "76697d70-6067-46bd-851d-2a7d6f060f27"
+    },
+    {
+      "step": "watcher_action_constructed",
+      "outcome": "success",
+      "at": "2026-10-20T15:55:07.854Z",
+      "occurrence_id": "69fca004-03a0-41e7-8366-4f667fdd378f",
+      "policy_version": "demo-2.1"
+    },
+    {
+      "step": "ssm_tunnel_ready",
+      "outcome": "success",
+      "at": "2026-10-20T15:55:09.922Z",
+      "instance_id": "i-073d4356a44dc991f"
+    },
+    {
+      "step": "emilia_first_distinct_signature",
+      "outcome": "pending",
+      "at": "2026-10-20T15:55:10.945Z"
+    },
+    {
+      "step": "emilia_second_distinct_signature",
+      "outcome": "receipt_issued",
+      "at": "2026-10-20T15:55:10.948Z"
+    },
+    {
+      "step": "keylime_agent_stopped",
+      "outcome": "success",
+      "at": "2026-10-20T15:55:13.269Z"
+    },
+    {
+      "step": "keylime_agent_recovery_started",
+      "outcome": "started",
+      "at": "2026-10-20T15:55:49.520Z"
+    },
+    {
+      "step": "keylime_agent_restarted",
+      "outcome": "success",
+      "at": "2026-10-20T15:56:34.908Z"
+    },
+    {
+      "step": "readonly_inbox_status_observed",
+      "outcome": "success",
+      "at": "2026-10-20T15:56:36.315Z"
+    }
+  ],
+  "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.",
+    "The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval."
+  ]
+}

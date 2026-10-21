@@ -1,0 +1,350 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC528 Keylime development node with no inbound network access.
+
+Parameters:
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0281f4b4279b17b5b
+    Description: Pinned official AlmaLinux OS 10 x86_64 AMI in us-east-2.
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  InstanceProfileName:
+    Type: String
+    Default: EC528ZeroTrustInstanceProfile
+  AgentUuid:
+    Type: String
+    Default: d432fbb3-d2f1-4a97-9ef7-75bd81c00000
+    AllowedPattern: '[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}'
+  SourceRevision:
+    Type: String
+    AllowedPattern: '[a-f0-9]{40}'
+  AutoTerminateMinutes:
+    Type: Number
+    Default: 240
+    MinValue: 60
+    MaxValue: 720
+
+Resources:
+  KeylimeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EC528 Keylime node with outbound bootstrap access only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for packages, GitHub, and Systems Manager
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP package mirror fallback
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS response fallback
+        - IpProtocol: udp
+          FromPort: 123
+          ToPort: 123
+          CidrIp: 0.0.0.0/0
+          Description: Clock synchronization for freshness decisions
+      Tags:
+        - Key: Name
+          Value: ec528-zero-trust-keylime
+        - Key: Project
+          Value: ec528-zero-trust
+
+  KeylimeNode:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfileName
+      InstanceInitiatedShutdownBehavior: terminate
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: enabled
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref KeylimeSecurityGroup
+          SubnetId: !Ref SubnetId
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 16
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: ec528-zero-trust-keylime
+        - Key: Project
+          Value: ec528-zero-trust
+        - Key: AutoTerminate
+          Value: !Sub '${AutoTerminateMinutes}m'
+        - Key: SourceRevision
+          Value: !Ref SourceRevision
+      UserData:
+        Fn::Base64: !Sub |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec > >(tee -a /var/log/ec528-bootstrap.log) 2>&1
+
+          systemd-run \
+            --unit=ec528-auto-terminate \
+            --on-active=${AutoTerminateMinutes}m \
+            /usr/bin/systemctl poweroff
+
+          dnf install -y \
+            keylime \
+            keylime-agent-rust \
+            nodejs \
+            npm \
+            openssl \
+            policycoreutils-devel \
+            python3 \
+            swtpm \
+            swtpm-tools \
+            tpm2-tools
+
+          # IMA: measure every program the node executes or maps as executable.  This
+          # AMI boots without a TPM, so the kernel keeps the measurement log in
+          # TPM-bypass mode; ec528-ima-emulator replays it into the swtpm PCR 10 below.
+          # The policy is loaded once at runtime (CONFIG_IMA_WRITE_POLICY=y).  If the
+          # kernel refuses it, set -e stops the bootstrap and the install fails closed.
+          # Pseudo and in-memory filesystems (including tmpfs) are not measured.
+          install -d -m 0755 /etc/ima
+          cat > /etc/ima/ima-policy <<'IMA'
+          dont_measure fsmagic=0x9fa0
+          dont_measure fsmagic=0x62656572
+          dont_measure fsmagic=0x64626720
+          dont_measure fsmagic=0x01021994
+          dont_measure fsmagic=0x858458f6
+          dont_measure fsmagic=0x1cd1
+          dont_measure fsmagic=0x42494e4d
+          dont_measure fsmagic=0x73636673
+          dont_measure fsmagic=0xf97cff8c
+          dont_measure fsmagic=0x27e0eb
+          dont_measure fsmagic=0x63677270
+          dont_measure fsmagic=0x6e736673
+          dont_measure fsmagic=0xde5e81e4
+          measure func=BPRM_CHECK
+          measure func=FILE_MMAP mask=MAY_EXEC
+          measure func=MODULE_CHECK uid=0
+          IMA
+          cat /etc/ima/ima-policy > /sys/kernel/security/ima/policy
+
+          install -d -o tss -g tss -m 0700 /var/lib/swtpm/keylime
+          if [ ! -f /var/lib/swtpm/keylime/tpm2-00.permall ]; then
+            sudo -u tss swtpm_setup \
+              --tpm2 \
+              --tpmstate /var/lib/swtpm/keylime \
+              --create-ek-cert \
+              --create-platform-cert \
+              --lock-nvram
+          fi
+
+          # AlmaLinux confines swtpm for libvirt, but its packaged policy does
+          # not permit a custom systemd service to enter the swtpm_t domain.
+          # Add only that executable-to-domain transition; do not weaken or
+          # disable SELinux for the rest of the host.
+          cat > /tmp/ec528_swtpm.te <<'POLICY'
+          policy_module(ec528_swtpm, 1.0)
+
+          gen_require(`
+              type init_t;
+              type keylime_agent_t;
+              type swtpm_exec_t;
+              type swtpm_t;
+          ')
+
+          type ec528_swtpm_port_t;
+          corenet_port(ec528_swtpm_port_t)
+          type ec528_swtpm_state_t;
+          files_type(ec528_swtpm_state_t)
+
+          domain_auto_transition_pattern(init_t, swtpm_exec_t, swtpm_t)
+          allow keylime_agent_t ec528_swtpm_port_t:tcp_socket name_connect;
+          allow swtpm_t ec528_swtpm_port_t:tcp_socket name_bind;
+          allow swtpm_t self:tcp_socket { listen accept };
+          manage_dirs_pattern(swtpm_t, ec528_swtpm_state_t, ec528_swtpm_state_t)
+          manage_files_pattern(swtpm_t, ec528_swtpm_state_t, ec528_swtpm_state_t)
+          POLICY
+          make -C /tmp -f /usr/share/selinux/devel/Makefile ec528_swtpm.pp
+          semodule -i /tmp/ec528_swtpm.pp
+          semanage port -a -t ec528_swtpm_port_t -p tcp 2321-2322
+          semanage fcontext -a -t ec528_swtpm_state_t '/var/lib/swtpm/keylime(/.*)?'
+          restorecon -R /var/lib/swtpm/keylime
+          rm -f /tmp/ec528_swtpm.te /tmp/ec528_swtpm.mod /tmp/ec528_swtpm.pp
+
+          cat > /etc/systemd/system/swtpm-keylime.service <<'UNIT'
+          [Unit]
+          Description=Software TPM for EC528 Keylime development
+          Before=keylime_agent.service
+
+          [Service]
+          User=tss
+          Group=tss
+          ExecStart=/usr/bin/swtpm socket --tpm2 --tpmstate dir=/var/lib/swtpm/keylime --server type=tcp,port=2321,bindaddr=127.0.0.1 --ctrl type=tcp,port=2322,bindaddr=127.0.0.1 --flags not-need-init,startup-clear
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+
+          install -d -m 0755 /etc/systemd/system/keylime_agent.service.d
+          cat > /etc/systemd/system/keylime_agent.service.d/10-swtpm.conf <<'UNIT'
+          [Unit]
+          Requires=swtpm-keylime.service
+          After=swtpm-keylime.service keylime_registrar.service
+
+          [Service]
+          Environment="TCTI=swtpm:host=127.0.0.1,port=2321"
+          UNIT
+
+          # Development-only bridge: copy IMA measurements into the swtpm sha256 PCR 10
+          # bank (the agent quotes sha256).  --ima-hash-alg names the template-hash
+          # column of ascii_runtime_measurements, which is sha1.
+          # bank so the verifier can check the log against a quote.  It is restarted
+          # with swtpm (PartOf) because a restarted swtpm starts with clean PCRs.
+          cat > /etc/systemd/system/ec528-ima-emulator.service <<'UNIT'
+          [Unit]
+          Description=EC528 IMA log to swtpm PCR 10 bridge (development only)
+          BindsTo=swtpm-keylime.service
+          PartOf=swtpm-keylime.service
+          After=swtpm-keylime.service
+          Before=keylime_agent.service
+
+          [Service]
+          Environment="TCTI=swtpm:host=127.0.0.1,port=2321"
+          ExecStart=/usr/bin/keylime_ima_emulator --hash_algs sha256 --ima-hash-alg sha1
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          cat > /etc/systemd/system/keylime_agent.service.d/20-ima-emulator.conf <<'UNIT'
+          [Unit]
+          Requires=ec528-ima-emulator.service
+          After=ec528-ima-emulator.service
+          UNIT
+
+          cp \
+            /var/lib/swtpm-localca/swtpm-localca-rootca-cert.pem \
+            /var/lib/swtpm-localca/issuercert.pem \
+            /var/lib/keylime/tpm_cert_store/
+
+          install -d -o root -g root -m 0755 /opt/ec528/workloads /opt/ec528/inputs
+          cat > /opt/ec528/workloads/checksum.sh <<'WORKLOAD'
+          #!/bin/sh
+          set -eu
+          [ "$#" -eq 1 ] || exit 64
+          exec sha256sum "$1"
+          WORKLOAD
+          printf '%s\n' 'EC528 approved workload payload' > /opt/ec528/inputs/demo-payload.txt
+          chown -R root:root /opt/ec528
+          chmod 0755 /opt/ec528/workloads/checksum.sh
+          chmod 0644 /opt/ec528/inputs/demo-payload.txt
+
+          systemctl daemon-reload
+          systemctl enable --now swtpm-keylime
+          systemctl enable --now ec528-ima-emulator
+          sleep 3
+          systemctl enable --now keylime_verifier
+          sleep 3
+          systemctl enable --now keylime_registrar
+          sleep 3
+          systemctl enable --now keylime_agent
+          sleep 5
+
+          agent_uuid='${AgentUuid}'
+
+          # Every executable the node will run must exist before the runtime policy is
+          # built, so the status helper is written first.
+          cat > /usr/local/libexec/ec528-keylime-status <<STATUS
+          #!/bin/sh
+          set -eu
+          temporary=\$(mktemp)
+          trap 'rm -f "\$temporary"' EXIT HUP INT TERM
+          /usr/bin/keylime_tenant -c cvstatus -u '$agent_uuid' > "\$temporary"
+          /usr/bin/python3 -I -c '
+          import json
+          import sys
+          agent_id, source = sys.argv[1:]
+          text = open(source, encoding="utf-8").read()
+          # keylime_tenant may print log lines around the JSON document.  Accept
+          # the whole output or exactly one line that parses as a JSON object.
+          try:
+              candidates = [json.loads(text)]
+          except ValueError:
+              candidates = []
+              for line in text.splitlines():
+                  line = line.strip()
+                  if line.startswith("{"):
+                      try:
+                          candidates.append(json.loads(line))
+                      except ValueError:
+                          pass
+          if len(candidates) != 1 or not isinstance(candidates[0], dict):
+              raise SystemExit("unexpected Keylime status output")
+          status = candidates[0]
+          if agent_id not in status or len(status) != 1:
+              raise SystemExit("unexpected Keylime status shape")
+          print(json.dumps({"agent_id": agent_id, "results": status[agent_id]}, separators=(",", ":")))
+          ' '$agent_uuid' "\$temporary"
+          STATUS
+          chmod 0755 /usr/local/libexec/ec528-keylime-status
+
+          # Build the IMA runtime policy from this node's own clean filesystem plus the
+          # current measurement log (for the boot aggregate).  This is trust on first
+          # use: it is only as good as the node at this moment.  The per-command script
+          # directory of the SSM agent is excluded because each command is a new file.
+          install -d -o root -g root -m 0700 /var/lib/ec528
+          printf '%s\n' '^/var/lib/amazon/ssm/.*' > /var/lib/ec528/ima-exclude.txt
+          keylime-policy create runtime \
+            --rootfs / \
+            --skip-path /proc,/sys,/dev,/run,/tmp,/var/tmp,/var/log,/var/cache,/var/lib/amazon,/var/lib/keylime,/var/lib/swtpm,/var/lib/ec528,/usr/share/doc,/usr/share/man,/usr/share/locale \
+            --ima-measurement-list /sys/kernel/security/ima/ascii_runtime_measurements \
+            --excludelist /var/lib/ec528/ima-exclude.txt \
+            --output /var/lib/ec528/runtime-policy.json
+          chmod 0600 /var/lib/ec528/runtime-policy.json
+
+          keylime_tenant -c delete -u "$agent_uuid" >/dev/null 2>&1 || true
+          keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1 \
+            --runtime-policy /var/lib/ec528/runtime-policy.json
+          sleep 5
+
+          printf '%s\n' keylime-ready > /var/lib/ec528-bootstrap-result
+
+Outputs:
+  InstanceId:
+    Value: !Ref KeylimeNode
+  SecurityGroupId:
+    Value: !Ref KeylimeSecurityGroup
+  TpmType:
+    Value: swtpm-development-only
+  ImaMode:
+    Value: kernel-log-replayed-into-swtpm-development-only

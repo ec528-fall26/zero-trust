@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-authorization",
+  "status": "pass",
+  "generated_at": "2026-10-19T18:42:24.972Z",
+  "repository_revision": "7de165c7160dc276695b0532a8f4b4b3aed2a51f",
+  "repository_dirty": false,
+  "versions": {
+    "nono": "nono 0.79.0",
+    "node": "v24.11.0",
+    "emilia_require_receipt": "0.9.0"
+  },
+  "action": {
+    "action_type": "workload.execute",
+    "operation": "checksum.sha256",
+    "target": "aws-keylime-demo-01",
+    "artifact_sha256": "sha256:b709d16d3bf8093e4affb066a07ff3aa40495b8536dad695b71a7918e4357a12",
+    "input_sha256": "sha256:79716dd53d76cc2fd5ce87f8d212838714928da7c8f3f95e9dc6203066c6a4b3",
+    "occurrence_id": "28a79506-30a0-44b2-a84f-411fb96f2650",
+    "policy_version": "demo-2.1"
+  },
+  "scenarios": [
+    {
+      "name": "missing_receipt",
+      "passed": true,
+      "observed": "refused"
+    },
+    {
+      "name": "one_signer_pending",
+      "passed": true,
+      "observed": "pending"
+    },
+    {
+      "name": "duplicate_signer",
+      "passed": true,
+      "observed": "not_counted_twice"
+    },
+    {
+      "name": "untrusted_signer",
+      "passed": true,
+      "observed": "refused"
+    },
+    {
+      "name": "two_distinct_signers",
+      "passed": true,
+      "observed": "receipt_issued"
+    },
+    {
+      "name": "receipt_target_binding",
+      "passed": true,
+      "observed": "action_hash_mismatch"
+    },
+    {
+      "name": "exact_action",
+      "passed": true,
+      "observed": "executed_once"
+    },
+    {
+      "name": "immediate_replay",
+      "passed": true,
+      "observed": "replay_refused"
+    },
+    {
+      "name": "replay_after_restart",
+      "passed": true,
+      "observed": "durably_unavailable"
+    },
+    {
+      "name": "expired_evidence",
+      "passed": true,
+      "observed": "receipt_expired"
+    },
+    {
+      "name": "one_signer_expiry",
+      "passed": true,
+      "observed": "expired_without_execution"
+    }
+  ],
+  "verified_receipts": [
+    {
+      "@version": "EP-RECEIPT-v1",
+      "payload": {
+        "receipt_id": "demo-60c834f8-3876-4ed1-892c-24993437a10b",
+        "subject": "agent:ec528-demo",
+        "created_at": "2026-10-19T18:42:24.907Z",
+        "claim": {
+          "action_type": "workload.execute",
+          "outcome": "allow_with_signoff",
+          "canonical_action": {
+            "action_type": "workload.execute",
+            "operation": "checksum.sha256",
+            "target": "aws-keylime-demo-01",
+            "artifact_sha256": "sha256:b709d16d3bf8093e4affb066a07ff3aa40495b8536dad695b71a7918e4357a12",
+            "input_sha256": "sha256:79716dd53d76cc2fd5ce87f8d212838714928da7c8f3f95e9dc6203066c6a4b3",
+            "occurrence_id": "28a79506-30a0-44b2-a84f-411fb96f2650",
+            "policy_version": "demo-2.1"
+          },
+          "action_hash": "sha256:fd48857e2483785dceccdf28022d1227d1e6ecbad0cd92b56f12921d0bd7ccec",
+          "quorum": {
+            "threshold": 2,
+            "signers": [
+              "ep:approver:operator",
+              "ep:approver:security"
+            ]
+          }
+        },
+        "assurance_proof": {
+          "@version": "EP-ASSURANCE-PROOF-v1",
+          "context_hash": "sha256:49035ed138458e50472a92a5797855bee240b3cc3e79587685a762597a68dc96",
+          "signoffs": [
+            {
+              "approver_key_id": "demo-operator-key",
+              "key_class": "A",
+              "webauthn": {
+                "authenticator_data": "EsoXtJryKJQ28wPgFmAwoh5SXSZuIJJnQzgBqP1AcaAFAAAAAQ",
+                "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiU1FOZTBUaEZqbEJIS3BLbGVYaFZ2dUpBczh3LWVWaDJoYWRpV1hwbzNKWSIsIm9yaWdpbiI6Imh0dHA6Ly8xMjcuMC4wLjEiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+                "signature": "MEUCIQDAJc9ookirfc0-_n6PtZlkf8KElSYYVVH6IMpYArWBvQIgeGwthmT6OUWw_JZc072ikT79repdfcHeTpUoHlrw8NI"
+              }
+            },
+            {
+              "approver_key_id": "demo-security-key",
+              "key_class": "A",
+              "webauthn": {
+                "authenticator_data": "EsoXtJryKJQ28wPgFmAwoh5SXSZuIJJnQzgBqP1AcaAFAAAAAQ",
+                "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiU1FOZTBUaEZqbEJIS3BLbGVYaFZ2dUpBczh3LWVWaDJoYWRpV1hwbzNKWSIsIm9yaWdpbiI6Imh0dHA6Ly8xMjcuMC4wLjEiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+                "signature": "MEQCIEOftyM4pnJKjinQQNwjkqBgda8PuOtYu_IVBSAvNqd8AiB61rD6Ux9mIwttgLPBLkHXutqawr_mpVIB7cJbST2ZCg"
+              }
+            }
+          ]
+        }
+      },
+      "signature": {
+        "algorithm": "Ed25519",
+        "value": "atlQD5ryxhvAkPn_eyzFqLR7JMJSYEm-v7K0BfIBuoCKWFXiGYW0ygaMxkrdCoGOpem6ADcEUZbMuFxkREntAQ"
+      }
+    }
+  ],
+  "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.",
+    "The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval."
+  ]
+}
