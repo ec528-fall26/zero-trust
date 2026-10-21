@@ -7,6 +7,12 @@ import { createDemoController } from './demo_controller.mjs';
 import { createKeylimeMcpHandler } from '../controller/keylime_mcp_client.mjs';
 
 const MAX_BODY_BYTES = 4096;
+// Recorded Jaeger exports the page may show. Fixed names only: no path from
+// the request ever reaches the filesystem.
+const RECORDED_TRACES = Object.freeze({
+  'end-to-end': 'otel-demo2-end-to-end.trace.json',
+  'ima-tamper': 'otel-ima-tamper.trace.json',
+});
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repository = path.resolve(moduleDirectory, '../..');
 
@@ -92,6 +98,19 @@ export async function startDemoServer(options) {
           'X-Content-Type-Options': 'nosniff',
         });
         response.end(viewModule);
+        return;
+      }
+      if (request.method === 'GET' && request.url.startsWith('/api/recorded-trace/')) {
+        const file = RECORDED_TRACES[request.url.slice('/api/recorded-trace/'.length)];
+        if (!file) {
+          sendJson(response, 404, { error: 'not_found' });
+          return;
+        }
+        try {
+          sendJson(response, 200, await readJsonFile(path.join(repository, 'results', 'traces', file), 2 * 1024 * 1024));
+        } catch {
+          sendJson(response, 404, { error: 'recording_unavailable' });
+        }
         return;
       }
       if (request.method === 'GET' && request.url === '/api/state') {

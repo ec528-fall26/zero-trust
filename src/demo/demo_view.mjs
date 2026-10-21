@@ -103,6 +103,9 @@ export function describeEvent(event) {
       return `Gate refused: ${GATE_REASONS[event.reason] || event.reason || 'receipt required'}`;
     }
   }
+  if (event.stage === 'demo' && event.outcome === 'request-received') {
+    return `Request sent: ${SCENARIO_NAMES[event.scenario] || event.scenario}.`;
+  }
   if (event.stage === 'keylime' && event.outcome === 'trusted') {
     return 'Local Keylime stand-in: material matches.';
   }
@@ -117,4 +120,125 @@ export function boundaryNote(snapshot) {
     real: `Real: ${real.join(', ')}.`,
     simulated: Array.isArray(snapshot?.limitations) ? snapshot.limitations : [],
   };
+}
+
+// Which lock stopped a request, for the "stopped by" pill.
+export function stoppedBy(view) {
+  if (!view || view.tone === 'ok') return null;
+  if (view.stopAt === 3) return { tech: 'keylime', label: 'Keylime, fails closed' };
+  if (view.reason === 'action_hash_mismatch') return { tech: 'emilia', label: 'EMILIA action hash' };
+  if (view.reason === 'replay_refused') return { tech: 'emilia', label: 'Durable receipt store' };
+  return { tech: 'emilia', label: 'EMILIA quorum' };
+}
+
+const SCENARIO_NAMES = Object.freeze({
+  missing: 'no receipt',
+  tampered: 'altered target',
+  approved: 'approved workload',
+  replay: 'receipt replay',
+});
+
+function millis(value) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// Turn the controller's audit events into one trace per request, using the
+// timestamps the server recorded. Spans: the whole request, the receipt gate,
+// the Keylime call (when the gate let it through), and the receipt commit.
+export function traceFromEvents(events, { remote = false } = {}) {
+  const traces = [];
+  let current = null;
+  for (const event of Array.isArray(events) ? events : []) {
+    const at = millis(event?.at);
+    if (at === null) continue;
+    if (event.stage === 'demo' && event.outcome === 'request-received') {
+      current = { scenario: event.scenario, start: at, marks: {} };
+      continue;
+    }
+    if (!current) continue;
+    if (event.stage === 'receipt-guard') {
+      if (event.decision === 'invoke') current.marks.invoke = at;
+      if (event.decision === 'allow') current.marks.allow = at;
+      if (event.decision === 'deny') {
+        current.marks.deny = at;
+        current.marks.denyReason = event.reason || 'receipt_required';
+      }
+    }
+    if (event.stage === 'demo' && (event.outcome === 'executed' || event.outcome === 'refused')) {
+      current.end = at;
+      current.outcome = event.outcome;
+      traces.push(buildTrace(current, remote));
+      current = null;
+    }
+  }
+  return traces;
+}
+
+function buildTrace({ scenario, start, end, outcome, marks }, remote) {
+  const keylimeService = remote ? 'keylime (AWS)' : 'keylime (stand-in)';
+  const passedGate = marks.invoke !== undefined;
+  const gateEnd = passedGate ? marks.invoke : (marks.deny ?? end);
+  const spans = [
+    { name: `request ${SCENARIO_NAMES[scenario] || scenario}`, service: 'controller', start, end, depth: 0, tone: outcome === 'executed' ? 'ok' : 'bad' },
+    {
+      name: 'emilia.receipt_gate',
+      service: 'emilia',
+      start,
+      end: gateEnd,
+      depth: 1,
+      tone: passedGate ? 'ok' : 'bad',
+      note: passedGate ? 'verified and reserved' : (GATE_REASONS[marks.denyReason] || marks.denyReason || 'refused'),
+    },
+  ];
+  if (passedGate) {
+    const keylimeEnd = marks.allow ?? marks.deny ?? end;
+    spans.push({
+      name: 'keylime.attest_and_deploy',
+      service: keylimeService,
+      start: marks.invoke,
+      end: keylimeEnd,
+      depth: 1,
+      tone: marks.allow !== undefined ? 'ok' : 'bad',
+      note: marks.allow !== undefined ? 'trusted, workload ran' : 'refused, did not run',
+    });
+    if (marks.allow !== undefined) {
+      spans.push({ name: 'emilia.receipt_commit', service: 'emilia', start: marks.allow, end, depth: 1, tone: 'ok', note: 'marked used' });
+    }
+  }
+  return { name: spans[0].name, scenario, start, end, outcome, spans };
+}
+
+// Convert a Jaeger JSON export (results/traces/*.trace.json) into the same
+// shape: spans sorted by start time, with nesting depth from CHILD_OF links.
+export function traceFromJaeger(document) {
+  const trace = document?.data?.[0];
+  if (!trace || !Array.isArray(trace.spans) || trace.spans.length === 0) return null;
+  const byId = new Map(trace.spans.map((span) => [span.spanID, span]));
+  const depthOf = (span, seen = new Set()) => {
+    const parentId = span.references?.find((ref) => ref.refType === 'CHILD_OF')?.spanID;
+    if (!parentId || !byId.has(parentId) || seen.has(parentId)) return 0;
+    seen.add(parentId);
+    return 1 + depthOf(byId.get(parentId), seen);
+  };
+  const tag = (span, key) => span.tags?.find((entry) => entry.key === key)?.value;
+  const spans = trace.spans
+    .map((span) => {
+      const start = span.startTime / 1000;
+      const errored = tag(span, 'error') === true || tag(span, 'otel.status_code') === 'ERROR';
+      return {
+        name: span.operationName,
+        service: trace.processes?.[span.processID]?.serviceName || 'unknown',
+        start,
+        end: start + span.duration / 1000,
+        depth: depthOf(span),
+        tone: errored ? 'bad' : 'ok',
+        note: tag(span, 'ec528.refusal_reason') || tag(span, 'keylime.attestation_status') || tag(span, 'otel.status_description') || '',
+      };
+    })
+    .sort((left, right) => left.start - right.start || left.depth - right.depth);
+  const start = Math.min(...spans.map((span) => span.start));
+  const end = Math.max(...spans.map((span) => span.end));
+  const root = spans.find((span) => span.depth === 0) || spans[0];
+  return { name: root.name, start, end, outcome: 'recorded', spans };
 }

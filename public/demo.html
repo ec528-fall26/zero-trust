@@ -6,91 +6,168 @@
   <title>EC528 Zero-Trust Demo</title>
   <style>
     :root {
-      --bg: #fafaf8; --card: #ffffff; --text: #1f1f1d; --muted: #5f5e5a; --line: #d3d1c7;
-      --ok-bg: #e1f5ee; --ok-line: #0f6e56; --ok-text: #085041;
-      --bad-bg: #fcebeb; --bad-line: #a32d2d; --bad-text: #791f1f;
-      --note-bg: #faeeda; --note-line: #ba7517; --note-text: #633806;
-      --token: #378add; --dot: #ffffff;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #1b1b1a; --card: #262624; --text: #ecebe5; --muted: #b4b2a9; --line: #444441;
-        --ok-bg: #085041; --ok-line: #5dcaa5; --ok-text: #e1f5ee;
-        --bad-bg: #791f1f; --bad-line: #f09595; --bad-text: #fcebeb;
-        --note-bg: #633806; --note-line: #ef9f27; --note-text: #faeeda;
-        --dot: #262624;
-      }
+      --bg: #05070c; --panel: #0b111c; --panel-2: #101827; --line: #1f2a3b; --text: #e8ecf2; --muted: #94a3b8;
+      --tan: #c9a882; --slide-blue: #4da3ff;
+      --nono: #000000; --nono-text: #ffffff; --nono-accent: #f2a65a;
+      --emilia: #0f1626; --emilia-gold: #b8913a; --emilia-text: #f4e7c6;
+      --keylime: #8dc63f; --keylime-light: #c4e08a; --keylime-dark: #0e7a5f;
+      --aws: #ff9900; --aws-ink: #232f3e;
+      --otel-blue: #425cc7; --otel-gold: #f5a800; --jaeger: #4fc3d9;
+      --ok: #3ddc97; --bad: #ff5c5c;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 system-ui, -apple-system, sans-serif; }
-    main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 48px; }
-    h1 { font-size: 30px; font-weight: 600; margin: 0; }
-    h2 { font-size: 18px; font-weight: 600; margin: 28px 0 10px; }
-    .lede { color: var(--muted); margin: 4px 0 18px; }
-    .note { background: var(--note-bg); color: var(--note-text); border: 1px solid var(--note-line); border-radius: 10px; padding: 10px 14px; font-size: 15px; }
-    .note p { margin: 2px 0; }
-    .pipeline { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-top: 18px; padding: 8px 8px 0; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 Poppins, "Avenir Next", system-ui, -apple-system, sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 56px; }
+    .kicker { color: var(--muted); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-weight: 300; font-size: 40px; letter-spacing: .02em; margin: 6px 0 0; text-transform: uppercase; }
+    .rule { width: 56px; height: 3px; background: var(--tan); margin: 14px 0 16px; border: 0; }
+    h2 { font-weight: 300; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; margin: 36px 0 4px; }
+    h2 + .rule { margin: 10px 0 14px; width: 40px; }
+    .lede { color: var(--muted); max-width: 780px; margin: 0 0 18px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+
+    .locks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .lock { padding: 16px 18px; }
+    .lock .head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .lock h3 { margin: 0; font-weight: 400; font-size: 17px; }
+    .lock p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .logo { flex: none; width: 52px; height: 52px; border-radius: 8px; display: grid; place-items: center; }
+    .logo.nono { background: var(--nono); color: var(--nono-text); font: 700 13px var(--mono); width: 92px; border: 1px solid #222; }
+    .logo.emilia { background: var(--emilia); border: 1px solid #1d2840; }
+
+    .boundary { margin-top: 16px; padding: 10px 16px; font-size: 14px; color: var(--muted); border-left: 3px solid var(--tan); background: var(--panel); border-radius: 0 10px 10px 0; }
+    .boundary b { color: var(--text); font-weight: 500; }
+    .boundary p { margin: 2px 0; }
+
+    .pipeline { margin-top: 18px; padding: 10px 10px 0; }
     svg { display: block; width: 100%; height: auto; }
-    .station rect { fill: var(--card); stroke: var(--line); stroke-width: 1.5; transition: fill .35s, stroke .35s; }
-    .station.ok rect { fill: var(--ok-bg); stroke: var(--ok-line); }
-    .station.bad rect { fill: var(--bad-bg); stroke: var(--bad-line); }
-    .station .title { font-size: 19px; font-weight: 600; fill: var(--text); }
-    .station .sub { font-size: 15px; fill: var(--muted); }
-    .station.ok .title, .station.ok .sub { fill: var(--ok-text); }
-    .station.bad .title, .station.bad .sub { fill: var(--bad-text); }
-    .approver { fill: var(--dot); stroke: var(--line); stroke-width: 1.5; transition: fill .35s, stroke .35s; }
-    .approver.on { fill: var(--ok-line); stroke: var(--ok-line); }
-    .track { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 6; }
+    .st rect.box { stroke-width: 1.5; }
+    .st text { font-family: inherit; }
+    .st .tag { font: 600 12px var(--mono); letter-spacing: .04em; }
+    .st .title { font-size: 18px; font-weight: 500; }
+    .st .sub { font-size: 13.5px; }
+    .badge { transition: opacity .3s; opacity: 0; }
+    .badge.show { opacity: 1; }
+    .track { stroke: #2a3a52; stroke-width: 2; stroke-dasharray: 3 7; }
     #token { transition: transform .5s cubic-bezier(.4, 0, .2, 1), opacity .25s; opacity: 0; }
-    #token circle { fill: var(--token); }
-    #caption { font-size: 16px; fill: var(--muted); }
-    @media (prefers-reduced-motion: reduce) { #token, .station rect, .approver { transition: none; } }
-    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
-    .group { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
-    .group h2 { margin: 0 0 10px; }
-    button { font: inherit; font-size: 16px; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 9px 14px; margin: 4px 6px 4px 0; cursor: pointer; }
-    button:hover { border-color: var(--muted); }
-    button.done { border-color: var(--ok-line); color: var(--ok-text); background: var(--ok-bg); }
-    .result { border-radius: 14px; border: 1px solid var(--line); background: var(--card); padding: 16px 18px; margin-top: 18px; min-height: 92px; }
-    .result.ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-text); }
-    .result.bad { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-text); }
-    .result strong { display: block; font-size: 22px; font-weight: 600; }
-    .diff { margin-top: 8px; font-size: 15px; }
-    .diff code { font-size: 14px; }
-    ol#log { list-style: none; padding: 0; margin: 0; }
-    #log li { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
-    #log time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 10px; }
-    details { margin-top: 22px; }
+    #caption { font-size: 15px; fill: var(--muted); }
+    .approver { stroke-width: 1.5; transition: fill .3s; }
+
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    .group { padding: 14px 16px; }
+    .group .label { font-size: 13px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+    button { font: inherit; font-size: 15px; color: var(--text); background: var(--panel-2); border: 1px solid #2b3a50; border-radius: 9px; padding: 8px 14px; margin: 4px 6px 4px 0; cursor: pointer; }
+    button:hover { border-color: var(--slide-blue); }
+    button.done { border-color: var(--emilia-gold); color: var(--emilia-text); background: #1b1608; }
+    button.sel { border-color: var(--jaeger); color: #dff7fb; background: #0b2229; }
+
+    .result { margin-top: 16px; padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: start; min-height: 88px; }
+    .result.ok { border-color: var(--ok); }
+    .result.bad { border-color: var(--bad); }
+    .result strong { display: block; font-size: 21px; font-weight: 500; }
+    .result.ok strong { color: var(--ok); }
+    .result.bad strong { color: var(--bad); }
+    .result .detail { color: var(--muted); }
+    .pill { font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; white-space: nowrap; }
+    .pill.nono { background: #2a1a0b; color: var(--nono-accent); border: 1px solid #5a3a16; }
+    .pill.emilia { background: #1b1608; color: #e9cf8e; border: 1px solid #5c4818; }
+    .pill.keylime { background: #10240c; color: var(--keylime-light); border: 1px solid #3c6420; }
+    .diff { grid-column: 1 / -1; font-size: 14px; color: var(--muted); }
+    .diff code { color: var(--text); }
+
+    .trace { margin-top: 0; overflow: hidden; }
+    .trace-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; background: #000; border-bottom: 1px solid var(--line); }
+    .trace-top .brand { font-weight: 600; letter-spacing: .04em; font-size: 14px; }
+    .otel { display: inline-flex; gap: 4px; align-items: center; }
+    .otel i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .trace-pick { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px 0; }
+    .trace-pick button { font-size: 13px; padding: 5px 10px; margin: 0; }
+    .trace-meta { padding: 10px 16px 4px; font-size: 14px; color: var(--muted); }
+    .trace-meta b { color: var(--text); font-weight: 500; }
+    .trace-body { padding: 4px 16px 16px; }
+    .axis, .row { display: grid; grid-template-columns: 300px 1fr; }
+    .axis { font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); padding: 6px 0; }
+    .ticks { position: relative; height: 16px; }
+    .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+    .ticks span:first-child { transform: none; }
+    .ticks span:last-child { transform: translateX(-100%); }
+    .row { border-bottom: 1px solid #141c29; min-height: 30px; align-items: center; }
+    .row .op { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; display: flex; align-items: center; gap: 6px; }
+    .row .op .svc { width: 4px; height: 18px; border-radius: 2px; flex: none; }
+    .row .op small { color: var(--muted); }
+    .lane { position: relative; height: 30px; }
+    .lane .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #141c29; }
+    .bar { position: absolute; top: 8px; height: 14px; border-radius: 3px; width: 0; transition: width .6s ease-out; }
+    .bar.err { outline: 2px solid var(--bad); outline-offset: 1px; }
+    .lane .dur { position: absolute; top: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; opacity: 0; transition: opacity .3s; }
+    .empty { color: var(--muted); padding: 18px 0; font-size: 14px; }
+
+    .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
+    .anatomy { padding: 14px 16px; display: grid; gap: 10px; }
+    .card { background: var(--emilia); border: 1px solid #1d2840; border-radius: 10px; padding: 10px 14px; }
+    .card .cap { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--emilia-gold); margin-bottom: 6px; }
+    .kv { display: grid; grid-template-columns: 120px 1fr; font: 13.5px var(--mono); gap: 2px 10px; }
+    .kv dt { color: #79a8ff; } .kv dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+    .hash { font: 14px var(--mono); overflow-wrap: anywhere; }
+    .signer { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 3px 0; }
+    .signer .c { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #3b4a63; display: grid; place-items: center; font-size: 11px; }
+    .signer.signed .c { background: var(--slide-blue); border-color: var(--slide-blue); color: #fff; }
+    .signer .s { color: var(--muted); margin-left: auto; }
+    .logpanel { padding: 14px 16px; }
+    ol#log { list-style: none; padding: 0; margin: 0; max-height: 420px; overflow: auto; }
+    #log li { padding: 6px 0; border-bottom: 1px solid #141c29; font-size: 14px; }
+    #log time { color: var(--muted); font: 12.5px var(--mono); margin-right: 10px; }
+    details { margin-top: 26px; }
     summary { cursor: pointer; color: var(--muted); }
-    pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; max-height: 22rem; font-size: 13px; }
-    @media (max-width: 760px) { .controls { grid-template-columns: 1fr; } }
+    pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; max-height: 22rem; font: 12.5px var(--mono); }
+    @media (max-width: 900px) { .locks, .controls, .two { grid-template-columns: 1fr; } .axis, .row { grid-template-columns: 180px 1fr; } }
+    @media (prefers-reduced-motion: reduce) { #token, .bar, .badge, .approver { transition: none; } }
   </style>
 </head>
 <body>
 <main>
-  <h1>Zero-trust workload demo</h1>
-  <p class="lede">An AI agent can ask for a job, but it only runs if two people approve that exact request and the cloud machine proves it's healthy.</p>
-  <div class="note" id="boundary"><p id="boundary-real">Loading…</p></div>
+  <div class="kicker">EC528 · Demo 2 · Live dashboard</div>
+  <h1>Zero trust confinement</h1>
+  <hr class="rule">
+  <p class="lede">An AI agent can ask for a job, but the job only runs if three locks open: the agent stays confined, two of three people approve that exact request, and the machine proves it's healthy. Use the buttons below and watch which lock stops each attempt.</p>
 
-  <div class="pipeline">
-    <svg viewBox="0 0 1000 230" role="img" aria-labelledby="pipeline-title">
+  <div class="locks">
+    <div class="panel lock">
+      <div class="head"><div class="logo nono">nono: &gt;..</div><h3>Lock 1 · Confine the agent</h3></div>
+      <p>The agent can only write one request file to a write-only outbox. It can't read it back, use the network, call the executor, or read signing keys. A trusted watcher rebuilds the request with its own IDs and hashes.</p>
+    </div>
+    <div class="panel lock">
+      <div class="head"><div class="logo emilia"><svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><rect x="9" y="6" width="5" height="28" fill="#b8913a"/><rect x="14" y="6" width="17" height="5" fill="#f4f4f4"/><rect x="14" y="17.5" width="14" height="5" fill="#b8913a"/><rect x="14" y="29" width="17" height="5" fill="#f4f4f4"/></svg></div><h3>Lock 2 · Authorize the action</h3></div>
+      <p>Two of three approvers sign an EMILIA receipt for this exact action and target. It expires quickly and works once. A missing signature, a changed action, or a replay is refused.</p>
+    </div>
+    <div class="panel lock">
+      <div class="head"><div class="logo"><svg viewBox="0 0 52 52" width="50" height="50" aria-hidden="true"><circle cx="26" cy="26" r="24" fill="#0e7a5f"/><circle cx="26" cy="26" r="20" fill="#c4e08a"/><circle cx="26" cy="26" r="16.5" fill="#8dc63f"/><g stroke="#c4e08a" stroke-width="1.6"><line x1="26" y1="10" x2="26" y2="42"/><line x1="10" y1="26" x2="42" y2="26"/><line x1="14.5" y1="14.5" x2="37.5" y2="37.5"/><line x1="37.5" y1="14.5" x2="14.5" y2="37.5"/></g><circle cx="26" cy="23" r="4.5" fill="#111"/><path d="M23.5 25 L22 35 H30 L28.5 25 Z" fill="#111"/></svg></div><h3>Lock 3 · Attest the node</h3></div>
+      <p>Keylime must report a fresh PASS (under 30 seconds old) for the intended machine. The job's bytes must match the approved fingerprints, and IMA catches unapproved programs.</p>
+    </div>
+  </div>
+
+  <div class="boundary" id="boundary"><p>Loading…</p></div>
+
+  <div class="panel pipeline">
+    <svg viewBox="0 0 1000 250" role="img" aria-labelledby="pipeline-title">
       <title id="pipeline-title">Request pipeline from the sandboxed agent to the workload</title>
-      <line class="track" x1="100" y1="182" x2="900" y2="182"></line>
+      <line class="track" x1="100" y1="200" x2="900" y2="200"></line>
       <g id="stations"></g>
-      <g id="token"><circle cx="100" cy="182" r="12"></circle></g>
-      <text id="caption" x="500" y="220" text-anchor="middle">Approve, then send a request.</text>
+      <g id="token"><circle cx="100" cy="200" r="11" fill="#4da3ff"></circle><circle cx="100" cy="200" r="5" fill="#05070c"></circle></g>
+      <text id="caption" x="500" y="240" text-anchor="middle">Approve, then send a request.</text>
     </svg>
   </div>
 
   <div class="controls">
-    <div class="group">
-      <h2>Approvers (2 of 3 needed)</h2>
+    <div class="panel group">
+      <div class="label">Approvers · 2 of 3 needed</div>
       <button data-approve="operator">Approve as operator</button>
       <button data-approve="security">Approve as security</button>
       <button data-approve="reviewer">Approve as reviewer</button>
     </div>
-    <div class="group">
-      <h2>Requests</h2>
+    <div class="panel group">
+      <div class="label">Requests</div>
       <button data-execute="missing">Try without receipt</button>
       <button data-execute="tampered">Try altered target</button>
       <button data-execute="approved">Run approved workload</button>
@@ -98,32 +175,75 @@
     </div>
   </div>
 
-  <div class="result" id="result" aria-live="polite"><strong id="result-title">No request yet</strong><span id="result-detail">Try a request without approvals first: it should be refused.</span><div class="diff" id="diff" hidden></div></div>
+  <div class="panel result" id="result" aria-live="polite">
+    <div><strong id="result-title">No request yet</strong><span class="detail" id="result-detail">Try a request without approvals first: it should be refused.</span></div>
+    <span class="pill" id="stopped" hidden></span>
+    <div class="diff" id="diff" hidden></div>
+  </div>
 
-  <h2>What happened</h2>
-  <ol id="log"></ol>
+  <h2>Trace timeline</h2>
+  <hr class="rule">
+  <p class="lede">The same request as a trace, in the style of Jaeger and OpenTelemetry. Each bar is one step, placed by its real start time and drawn to its real duration. Pick a request from this session, or a recorded run on AWS.</p>
+  <div class="panel trace">
+    <div class="trace-top"><span class="brand">TRACE VIEW</span><span class="otel" title="OpenTelemetry colors"><i style="background:#425cc7"></i><i style="background:#f5a800"></i></span><span style="color:var(--muted);font-size:13px">Jaeger-style, rendered in the page</span></div>
+    <div class="trace-pick" id="trace-pick"></div>
+    <div class="trace-meta" id="trace-meta"></div>
+    <div class="trace-body" id="trace-body"><div class="empty">No request yet. Send one, or open a recorded AWS run.</div></div>
+  </div>
+
+  <div class="two" style="margin-top:28px">
+    <div>
+      <h2 style="margin-top:0">Anatomy of the receipt</h2>
+      <hr class="rule">
+      <div class="panel anatomy">
+        <div class="card"><div class="cap">1 · Canonical action (computed by the watcher)</div><dl class="kv" id="action-kv"></dl></div>
+        <div class="card"><div class="cap">2 · Action hash</div><div class="hash" id="action-hash"></div></div>
+        <div class="card"><div class="cap">3 · Quorum: 2 of 3 approvers</div><div id="signers"></div></div>
+        <div class="card"><div class="cap">4 · Receipt</div><div class="hash" id="receipt-line">Not issued</div></div>
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">What happened</h2>
+      <hr class="rule">
+      <div class="panel logpanel"><ol id="log"></ol></div>
+    </div>
+  </div>
 
   <details>
     <summary>Show raw details (approved action, last response, audit events)</summary>
-    <h2>Exact approved action</h2>
     <pre id="raw-action"></pre>
-    <h2>Last response</h2>
     <pre id="raw-result">No request yet.</pre>
-    <h2>Audit events</h2>
     <pre id="raw-events"></pre>
   </details>
 </main>
 
 <script type="module">
-  import { STATIONS, boundaryNote, describeEvent, describeResponse } from '/demo-view.js';
+  import {
+    STATIONS, boundaryNote, describeEvent, describeResponse, stoppedBy, traceFromEvents, traceFromJaeger,
+  } from '/demo-view.js';
 
   const SVG = 'http://www.w3.org/2000/svg';
   const X = [100, 300, 500, 700, 900];
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : ms));
   const $ = (selector) => document.querySelector(selector);
+  const el = (tag, props = {}, ...children) => {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...children);
+    return node;
+  };
   let busy = false;
   let state = null;
+  let selectedTrace = null;
+
+  // Each station wears its technology's colors; pass/fail is a badge.
+  const THEMES = [
+    { fill: '#000000', stroke: '#3a3a3a', tag: 'nono', tagColor: '#f2a65a', title: '#ffffff', sub: '#b9b9b9' },
+    { fill: '#0f1626', stroke: '#b8913a', tag: 'EMILIA', tagColor: '#b8913a', title: '#f4e7c6', sub: '#c9b78a' },
+    { fill: '#0f1626', stroke: '#b8913a', tag: 'EMILIA', tagColor: '#b8913a', title: '#f4e7c6', sub: '#c9b78a' },
+    { fill: '#0c2a12', stroke: '#8dc63f', tag: 'Keylime', tagColor: '#c4e08a', title: '#e6f4cf', sub: '#a9cf7a' },
+    { fill: '#232f3e', stroke: '#ff9900', tag: 'AWS', tagColor: '#ff9900', title: '#ffffff', sub: '#c9d1dc' },
+  ];
 
   function svg(name, attributes, parent) {
     const node = document.createElementNS(SVG, name);
@@ -133,20 +253,33 @@
   }
 
   const stations = STATIONS.map((station, index) => {
-    const group = svg('g', { class: 'station', id: `station-${station.id}` }, $('#stations'));
-    svg('rect', { x: X[index] - 88, y: 40, width: 176, height: 104, rx: 12 }, group);
-    svg('text', { class: 'title', x: X[index], y: 78, 'text-anchor': 'middle' }, group).textContent = station.title;
-    const sub = svg('text', { class: 'sub', x: X[index], y: 106, 'text-anchor': 'middle' }, group);
+    const theme = THEMES[index];
+    const group = svg('g', { class: 'st' }, $('#stations'));
+    svg('rect', { class: 'box', x: X[index] - 88, y: 40, width: 176, height: 118, rx: 12, fill: theme.fill, stroke: theme.stroke }, group);
+    const tag = svg('text', { class: 'tag', x: X[index], y: 66, 'text-anchor': 'middle', fill: theme.tagColor }, group);
+    tag.textContent = theme.tag;
+    svg('text', { class: 'title', x: X[index], y: 96, 'text-anchor': 'middle', fill: theme.title }, group).textContent = station.title;
+    const sub = svg('text', { class: 'sub', x: X[index], y: 120, 'text-anchor': 'middle', fill: theme.sub }, group);
     sub.textContent = station.subtitle;
-    return { group, sub, base: station.subtitle };
+    const badge = svg('g', { class: 'badge' }, group);
+    const circle = svg('circle', { cx: X[index] + 78, cy: 46, r: 13, fill: '#3ddc97', stroke: '#05070c', 'stroke-width': 3 }, badge);
+    const mark = svg('text', { x: X[index] + 78, y: 51, 'text-anchor': 'middle', fill: '#05070c', 'font-size': 15, 'font-weight': 700 }, badge);
+    mark.textContent = '✓';
+    return { group, sub, tag, badge, circle, mark, base: station.subtitle };
   });
   const approverDots = ['operator', 'security', 'reviewer'].map((role, index) => (
-    svg('circle', { class: 'approver', cx: 278 + index * 22, cy: 126, r: 7, 'data-role': role }, stations[1].group)
+    svg('circle', { class: 'approver', cx: 278 + index * 22, cy: 140, r: 7, fill: '#0f1626', stroke: '#b8913a', 'data-role': role }, stations[1].group)
   ));
 
   function setStation(index, tone, text) {
-    stations[index].group.setAttribute('class', `station${tone ? ` ${tone}` : ''}`);
-    stations[index].sub.textContent = text ?? stations[index].base;
+    const station = stations[index];
+    station.sub.textContent = text ?? station.base;
+    station.badge.classList.toggle('show', Boolean(tone));
+    if (tone) {
+      station.circle.setAttribute('fill', tone === 'ok' ? '#3ddc97' : '#ff5c5c');
+      station.mark.textContent = tone === 'ok' ? '✓' : '✕';
+    }
+    station.tone = tone || '';
   }
 
   function placeToken(index, visible = true) {
@@ -154,64 +287,85 @@
     $('#token').style.opacity = visible ? '1' : '0';
   }
 
-  function renderStatic(snapshot) {
+  function renderBoundary(snapshot) {
     const note = boundaryNote(snapshot);
-    $('#boundary').innerHTML = '';
-    const real = document.createElement('p');
-    real.textContent = note.real;
-    $('#boundary').append(real);
-    for (const line of note.simulated) {
-      const item = document.createElement('p');
-      item.textContent = `Simulated: ${line}`;
-      $('#boundary').append(item);
-    }
-    stations[3].base = snapshot.keylime_mode === 'remote-mcp' ? 'AWS node' : 'local stand-in';
-    if (stations[3].group.getAttribute('class') === 'station') stations[3].sub.textContent = stations[3].base;
+    const box = $('#boundary');
+    box.replaceChildren(el('p', {}, el('b', { textContent: 'Real in this run: ' }), note.real.replace(/^Real: /, '')));
+    for (const line of note.simulated) box.append(el('p', {}, el('b', { textContent: 'Simulated: ' }), line));
+  }
 
+  function renderAnatomy(snapshot) {
+    const action = snapshot.action || {};
+    const short = (value) => (typeof value === 'string' && value.length > 30 ? `${value.slice(0, 15)}…${value.slice(-6)}` : value);
+    $('#action-kv').replaceChildren(...[
+      ['action_type', action.action_type], ['operation', action.operation], ['target', action.target],
+      ['artifact', short(action.artifact_sha256)], ['input', short(action.input_sha256)],
+      ['occurrence', short(action.occurrence_id)], ['policy', action.policy_version],
+    ].flatMap(([key, value]) => [el('dt', { textContent: key }), el('dd', { textContent: value ?? '' })]));
+    $('#action-hash').textContent = short(snapshot.action_hash) || '';
+    const signedRoles = snapshot.approvals.slice(0, 2);
+    $('#signers').replaceChildren(...['operator', 'security', 'reviewer'].map((role) => {
+      const signed = signedRoles.includes(role);
+      const status = signed ? 'signed'
+        : (snapshot.receipt_ready ? 'not needed' : (snapshot.approvals.includes(role) ? 'approved' : 'waiting'));
+      return el('div', { className: `signer${signed ? ' signed' : ''}` },
+        el('span', { className: 'c', textContent: signed ? '✓' : '' }),
+        `ep:approver:${role}`, el('span', { className: 's', textContent: status }));
+    }));
+    const used = snapshot.events.some((event) => event.stage === 'receipt-guard' && event.decision === 'invoke');
+    $('#receipt-line').textContent = snapshot.receipt_ready
+      ? `${snapshot.receipt_id} · Ed25519 · EP-RECEIPT-v1 · ${used ? 'used once' : 'unused'}`
+      : 'Not issued: two approvals needed';
+  }
+
+  function renderLog(snapshot) {
+    const items = [];
+    for (const event of [...snapshot.events].reverse()) {
+      const text = describeEvent(event);
+      if (text) items.push(el('li', {}, el('time', { textContent: new Date(event.at).toLocaleTimeString() }), text));
+    }
+    $('#log').replaceChildren(...items);
+  }
+
+  function renderStatic(snapshot) {
+    renderBoundary(snapshot);
+    stations[3].base = snapshot.keylime_mode === 'remote-mcp' ? 'AWS node' : 'local stand-in';
+    stations[4].tag.textContent = snapshot.keylime_mode === 'remote-mcp' ? 'AWS' : 'LOCAL';
+    if (!stations[3].tone) stations[3].sub.textContent = stations[3].base;
     setStation(0, 'ok', 'request ready');
-    const count = snapshot.approvals.length;
     setStation(1, snapshot.receipt_ready ? 'ok' : '', snapshot.receipt_ready
-      ? 'receipt issued'
-      : `${Math.min(count, 2)} of 2 approvals`);
+      ? 'receipt issued' : `${Math.min(snapshot.approvals.length, 2)} of 2 approvals`);
     for (const dot of approverDots) {
-      dot.setAttribute('class', snapshot.approvals.includes(dot.dataset.role) ? 'approver on' : 'approver');
+      dot.setAttribute('fill', snapshot.approvals.includes(dot.dataset.role) ? '#b8913a' : '#0f1626');
     }
     for (const button of document.querySelectorAll('[data-approve]')) {
       button.classList.toggle('done', snapshot.approvals.includes(button.dataset.approve));
     }
-
-    const log = $('#log');
-    log.innerHTML = '';
-    for (const event of [...snapshot.events].reverse()) {
-      const text = describeEvent(event);
-      if (!text) continue;
-      const item = document.createElement('li');
-      const time = document.createElement('time');
-      time.textContent = new Date(event.at).toLocaleTimeString();
-      item.append(time, text);
-      log.append(item);
-    }
+    renderAnatomy(snapshot);
+    renderLog(snapshot);
     $('#raw-action').textContent = JSON.stringify({ ...snapshot.action, action_hash: snapshot.action_hash }, null, 2);
     $('#raw-result').textContent = snapshot.last_response ? JSON.stringify(snapshot.last_response, null, 2) : 'No request yet.';
     $('#raw-events').textContent = JSON.stringify(snapshot.events, null, 2);
   }
 
   function showResult(view, mode, snapshot) {
-    const box = $('#result');
-    box.className = `result ${view.tone}`;
+    $('#result').className = `panel result ${view.tone}`;
     $('#result-title').textContent = view.title;
     $('#result-detail').textContent = view.detail;
+    const pill = $('#stopped');
+    const by = stoppedBy(view);
+    pill.hidden = !by;
+    if (by) {
+      pill.className = `pill ${by.tech}`;
+      pill.textContent = `Stopped by ${by.label}`;
+    }
     const diff = $('#diff');
-    if (mode === 'tampered' && view.reason === 'action_hash_mismatch') {
-      diff.hidden = false;
-      diff.innerHTML = '';
-      const approved = document.createElement('div');
-      approved.append('Approved target: ', Object.assign(document.createElement('code'), { textContent: snapshot.action.target }));
-      const requested = document.createElement('div');
-      requested.append('Requested target: ', Object.assign(document.createElement('code'), { textContent: `${snapshot.action.target}-tampered` }));
-      diff.append(approved, requested);
-    } else {
-      diff.hidden = true;
+    diff.hidden = !(mode === 'tampered' && view.reason === 'action_hash_mismatch');
+    if (!diff.hidden) {
+      diff.replaceChildren(
+        el('div', {}, 'Approved target: ', el('code', { textContent: snapshot.action.target })),
+        el('div', {}, 'Requested target: ', el('code', { textContent: `${snapshot.action.target}-tampered` })),
+      );
     }
   }
 
@@ -221,27 +375,127 @@
     placeToken(0, true);
     await wait(30);
     $('#token').style.transition = '';
-    $('#caption').textContent = 'Request leaves the sandbox';
+    $('#caption').textContent = 'Request leaves the nono sandbox';
     for (let index = 1; index <= view.stopAt; index += 1) {
       placeToken(index, true);
       await wait(550);
       if (index === 2) setStation(2, view.stopAt > 2 || view.tone === 'ok' ? 'ok' : 'bad', view.gate);
       if (index === 3) setStation(3, view.keylime === 'trusted' ? 'ok' : 'bad', view.keylime);
       if (index === 4) setStation(4, 'ok', view.job);
-      if (index < view.stopAt) await wait(200);
+      if (index < view.stopAt) await wait(180);
     }
     if (view.stopAt === 3) setStation(4, 'bad', view.job);
     $('#caption').textContent = view.title;
     showResult(view, mode, snapshot);
-    await wait(700);
+    await wait(600);
     placeToken(view.stopAt, false);
+  }
+
+  // ---- Trace view (Jaeger style) ----
+  function spanColor(span) {
+    if (span.depth === 0) return '#425cc7';
+    if (/^scenario\./.test(span.name)) return '#4fc3d9';
+    const key = `${span.service} ${span.name}`;
+    if (/keylime/.test(key)) return '#8dc63f';
+    if (/emilia|receipt/.test(key)) return '#b8913a';
+    if (/ssm|aws/.test(key)) return '#ff9900';
+    if (/nono|watcher|sandbox/.test(key)) return '#d9d9d9';
+    return '#4da3ff';
+  }
+
+  function formatDuration(ms) {
+    if (ms < 1) return `${Math.max(0, ms * 1000).toFixed(0)} µs`;
+    if (ms < 1000) return `${ms.toFixed(ms < 10 ? 1 : 0)} ms`;
+    const seconds = ms / 1000;
+    if (seconds < 60) return `${seconds.toFixed(2)} s`;
+    return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  }
+
+  function renderTrace(trace, label) {
+    selectedTrace = trace;
+    const total = Math.max(trace.end - trace.start, 1);
+    $('#trace-meta').replaceChildren(
+      el('b', { textContent: label }), ` · start ${new Date(trace.start).toLocaleTimeString()} · duration `,
+      el('b', { textContent: formatDuration(trace.end - trace.start) }),
+      ` · ${trace.spans.length} spans · depth ${Math.max(...trace.spans.map((span) => span.depth)) + 1}`,
+    );
+    const tickValues = [0, 0.25, 0.5, 0.75, 1];
+    const axis = el('div', { className: 'axis' }, el('span', { textContent: 'Service and operation' }),
+      el('div', { className: 'ticks' }, ...tickValues.map((t) => el('span', { textContent: formatDuration(total * t), style: `left:${t * 100}%` }))));
+    const rootService = trace.spans.find((span) => span.depth === 0)?.service;
+    const rows = trace.spans.map((span) => {
+      const left = ((span.start - trace.start) / total) * 100;
+      const width = Math.max(((span.end - span.start) / total) * 100, 0.35);
+      const color = spanColor(span);
+      const bar = el('div', { className: `bar${span.tone === 'bad' ? ' err' : ''}`, style: `left:${left}%;background:${color}` });
+      bar.dataset.width = `${width}%`;
+      // Labels sit right of the bar, or left of it when the bar reaches the edge.
+      const label = `${formatDuration(span.end - span.start)}${span.note ? ` · ${span.note}` : ''}`;
+      let position = `left:${left + width + 0.6}%`;
+      if (left + width > 72) {
+        position = left > 14
+          ? `right:${100 - left + 0.6}%;text-align:right`
+          : `right:${100 - (left + width) + 0.8}%;text-align:right;color:#05070c;font-weight:600`;
+      }
+      const dur = el('span', { className: 'dur', style: position, textContent: label });
+      const lane = el('div', { className: 'lane' }, ...tickValues.slice(1, 4).map((t) => el('div', { className: 'grid', style: `left:${t * 100}%` })), bar, dur);
+      const op = el('div', { className: 'op', style: `padding-left:${span.depth * 16}px` },
+        el('span', { className: 'svc', style: `background:${color}` }),
+        el('span', {}, span.tone === 'bad' ? '! ' : '', span.name, ' ',
+          el('small', { textContent: span.service === rootService && span.depth > 0 ? '' : span.service })));
+      return { row: el('div', { className: 'row' }, op, lane), bar, dur, offset: (span.start - trace.start) / total };
+    });
+    $('#trace-body').replaceChildren(axis, ...rows.map((entry) => entry.row));
+    // Grow each bar in start-time order, like the run unfolding.
+    requestAnimationFrame(() => {
+      for (const entry of rows) {
+        const delay = reduceMotion ? 0 : Math.round(entry.offset * 1400);
+        entry.bar.style.transitionDelay = `${delay}ms`;
+        entry.dur.style.transition = `opacity .3s ${delay + 450}ms`;
+        entry.bar.style.width = entry.bar.dataset.width;
+        entry.dur.style.opacity = '1';
+      }
+    });
+  }
+
+  const recorded = {};
+  function renderTracePicker(snapshot) {
+    const traces = traceFromEvents(snapshot.events, { remote: snapshot.keylime_mode === 'remote-mcp' });
+    const buttons = traces.map((trace, index) => {
+      const button = el('button', { textContent: `${index + 1} · ${trace.name.replace('request ', '')} · ${formatDuration(trace.end - trace.start)}` });
+      button.style.borderColor = trace.outcome === 'executed' ? '#3ddc97' : '#ff5c5c';
+      button.addEventListener('click', () => { markSelected(button); renderTrace(trace, `Session request ${index + 1}`); });
+      return button;
+    });
+    const recordedButtons = [['end-to-end', 'Recorded AWS run · end to end'], ['ima-tamper', 'Recorded AWS run · IMA tamper']].map(([key, text]) => {
+      const button = el('button', { textContent: text });
+      button.addEventListener('click', async () => {
+        markSelected(button);
+        try {
+          if (!recorded[key]) {
+            const response = await fetch(`/api/recorded-trace/${key}`);
+            if (!response.ok) throw new Error('This recording is not in this checkout.');
+            recorded[key] = traceFromJaeger(await response.json());
+          }
+          renderTrace(recorded[key], text);
+        } catch (error) {
+          $('#trace-body').replaceChildren(el('div', { className: 'empty', textContent: error.message }));
+        }
+      });
+      return button;
+    });
+    $('#trace-pick').replaceChildren(...buttons, ...recordedButtons);
+    return { traces, buttons };
+  }
+
+  function markSelected(button) {
+    for (const other of document.querySelectorAll('#trace-pick button')) other.classList.remove('sel');
+    button.classList.add('sel');
   }
 
   async function post(path, body) {
     const response = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     const value = await response.json();
     if (!response.ok) throw new Error(value.error || 'request failed');
@@ -249,12 +503,11 @@
   }
 
   function showError(message) {
-    const friendly = /two approvals are required/.test(message)
-      ? 'Approve twice first: this test needs a receipt.'
-      : message;
-    $('#result').className = 'result bad';
+    $('#result').className = 'panel result bad';
     $('#result-title').textContent = 'Not sent';
-    $('#result-detail').textContent = friendly;
+    $('#result-detail').textContent = /two approvals are required/.test(message)
+      ? 'Approve twice first: this test needs a receipt.' : message;
+    $('#stopped').hidden = true;
     $('#diff').hidden = true;
   }
 
@@ -275,8 +528,13 @@
       try {
         state = await post('/api/execute', { mode: button.dataset.execute });
         renderStatic(state);
+        const { traces, buttons } = renderTracePicker(state);
         const view = describeResponse(state.last_response, state);
         if (view) await animate(view, button.dataset.execute, state);
+        if (traces.length) {
+          markSelected(buttons[buttons.length - 1]);
+          renderTrace(traces[traces.length - 1], `Session request ${traces.length}`);
+        }
       } catch (error) {
         showError(error.message);
       } finally {
@@ -287,6 +545,7 @@
 
   state = await (await fetch('/api/state')).json();
   renderStatic(state);
+  renderTracePicker(state);
 </script>
 </body>
 </html>
