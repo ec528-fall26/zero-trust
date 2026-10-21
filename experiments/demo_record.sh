@@ -109,7 +109,7 @@ PY
 }
 
 start_tunnel() {
-  ./infra/aws/open-tunnel.sh "$stack" >"$output/tunnel.log" 2>&1 &
+  PATH=$tunnel_path ./infra/aws/open-tunnel.sh "$stack" >"$output/tunnel.log" 2>&1 &
   background_pids+=("$!")
   local tunnel_pid=$!
   for _attempt in $(seq 1 60); do
@@ -139,11 +139,15 @@ done
 ok "node, nono, aws, docker, curl found"
 "$python" -c 'import jsonschema' 2>/dev/null || die "$python cannot import jsonschema (run: .venv/bin/pip install -e .)"
 ok "Python environment ready"
+# The plugin directory is added to PATH only for the tunnel command. nono's
+# --strict-broker-path refuses to start if any PATH entry is writable from
+# inside the sandbox (for example a plugin unpacked under /tmp).
+tunnel_path=$PATH
 if [ -n "${SESSION_MANAGER_PLUGIN_BIN:-}" ]; then
-  plugin_directory=$(dirname "$SESSION_MANAGER_PLUGIN_BIN")
-  export PATH="$plugin_directory:$PATH"
+  [ -x "$SESSION_MANAGER_PLUGIN_BIN" ] || die "SESSION_MANAGER_PLUGIN_BIN is not executable"
+  tunnel_path="$(dirname "$SESSION_MANAGER_PLUGIN_BIN"):$PATH"
 fi
-command -v session-manager-plugin >/dev/null \
+PATH=$tunnel_path command -v session-manager-plugin >/dev/null \
   || die "AWS Session Manager plugin not found (install it, or set SESSION_MANAGER_PLUGIN_BIN)"
 ok "Session Manager plugin found"
 if ! curl -sf -o /dev/null --max-time 2 "$jaeger_ui"; then
