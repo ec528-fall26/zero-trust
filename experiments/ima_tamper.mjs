@@ -7,7 +7,6 @@
 import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -202,7 +201,10 @@ async function runExperiment() {
   const profile = process.env.AWS_PROFILE || 'ec528-deployer';
   const region = process.env.AWS_REGION || 'us-east-2';
   const stackName = process.env.AWS_STACK_NAME || 'ec528-zero-trust-demo';
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'ec528-ima-'));
+  // Same layout rule as the end-to-end experiment: never under os.tmpdir().
+  const runsRoot = path.join(repositoryRoot, 'build', 'runs');
+  await mkdir(runsRoot, { recursive: true, mode: 0o700 });
+  const temporaryRoot = await mkdtemp(path.join(runsRoot, 'ec528-ima-'));
   const scenarios = [];
   const timeline = [];
   let tunnel = null;

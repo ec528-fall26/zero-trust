@@ -133,6 +133,10 @@ stop_background() {
 clear_screen
 printf '\n  %sPreflight%s  (stack %s, region %s)\n\n' "$bold" "$reset" "$stack" "$AWS_REGION"
 case "$repository" in
+  /tmp/*|/private/tmp/*|/var/*|/private/var/*)
+    die "This checkout is in a folder nono lets the sandbox read ($repository). Clone it under your home folder, e.g. ~/ec528-demo." ;;
+esac
+case "$repository" in
   "$HOME/Documents"*|"$HOME/Desktop"*|*"Mobile Documents"*)
     warn "This checkout may be in iCloud Drive; commands can stall for a minute. Prefer a clone outside it." ;;
 esac

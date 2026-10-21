@@ -9,13 +9,13 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
+import { assertSandboxCannotRead } from './sandbox_check.mjs';
 import {
   addEvent,
   initTelemetry,
@@ -217,7 +217,11 @@ async function runExperiment() {
   const region = process.env.AWS_REGION || 'us-east-2';
   const stackName = process.env.AWS_STACK_NAME || 'ec528-zero-trust-demo';
   const agentUuid = 'd432fbb3-d2f1-4a97-9ef7-75bd81c00000';
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'ec528-e2e-'));
+  // Keep controller state out of os.tmpdir(): nono's default macOS groups let
+  // the sandbox read /private/var, which holds the per-user temp folder.
+  const runsRoot = path.join(repositoryRoot, 'build', 'runs');
+  await mkdir(runsRoot, { recursive: true, mode: 0o700 });
+  const temporaryRoot = await mkdtemp(path.join(runsRoot, 'ec528-e2e-'));
   const timeline = [];
   const scenarios = [];
   let tunnel = null;
@@ -279,6 +283,26 @@ async function runExperiment() {
     ], { env: { ...process.env, PYTHONPATH: path.join(repositoryRoot, 'src') } });
     await writeFile(profilePath, `${generatedProfile}\n`, { mode: 0o600 });
     mark('nono_profile_generated', 'success');
+
+    // Prove, with nono's own policy evaluation, that the agent cannot read
+    // anything the controller keeps private. Fails closed.
+    const pathsChecked = await withSpan('sandbox.controller_state_unreadable', {}, () => (
+      assertSandboxCannotRead({
+        nono,
+        profilePath,
+        workdir: directories.work,
+        paths: [
+          directories.storage,
+          directories.inputs,
+          directories.state,
+          path.join(temporaryRoot, 'stopped-state'),
+          path.join(temporaryRoot, 'recovery-state'),
+          artifactPath,
+          tokenPath,
+        ],
+      })
+    ));
+    mark('controller_state_unreadable_by_sandbox', 'success', { paths_checked: pathsChecked });
 
     const requestPath = path.join(directories.outbox, `${requestId}.json`);
     const encodedRequest = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
