@@ -41,9 +41,12 @@ def prepare(repository: Path) -> dict[str, Path]:
     for directory in directories.values():
         directory.mkdir(mode=0o700)
 
+    # Same bytes as the workload and input installed on the AWS node, so the
+    # dashboard works against the real Keylime MCP as well as the local stand-in.
+    workload = repository / "infra" / "aws" / "workload"
     input_path = directories["inputs"] / "demo-payload.txt"
-    input_path.write_bytes(b"EC528 approved workload payload\n")
-    artifact_path = repository / "experiments" / "demo_workload.sh"
+    input_path.write_bytes((workload / "demo-payload.txt").read_bytes())
+    artifact_path = workload / "checksum.sh"
     input_digest = f"sha256:{hashlib.sha256(input_path.read_bytes()).hexdigest()}"
     request_id = str(uuid.uuid4())
     schema = load_schema(repository / "src" / "request_schema.json")

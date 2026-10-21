@@ -1,4 +1,4 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper jaeger trace-replay ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper jaeger trace-replay demo-record fetch-token ci
 
 PYTHON ?= python3
 
@@ -40,6 +40,16 @@ ima-tamper:
 jaeger:
 	docker rm -f ec528-jaeger >/dev/null 2>&1 || true
 	docker run -d --name ec528-jaeger -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/all-in-one:1.62.0
+
+STACK ?= ec528-zero-trust-demo
+
+# Copy the deployed node's MCP token to build/aws-keylime/mcp-token (0600).
+fetch-token:
+	./infra/aws/fetch-token.sh $(STACK)
+
+# Guided, paused run of every demo shot for screen recording (needs a deployed stack).
+demo-record:
+	./experiments/demo_record.sh $(STACK)
 
 # Replay recorded results files as traces into the local Jaeger.
 trace-replay:

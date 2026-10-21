@@ -223,3 +223,34 @@ class HandoffTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NodeWorkloadConsistencyTest(unittest.TestCase):
+    """The dashboard, experiments and AWS template must use identical bytes."""
+
+    REPOSITORY = Path(__file__).resolve().parents[1]
+
+    def test_workload_files_match_the_aws_template(self) -> None:
+        workload = self.REPOSITORY / "infra" / "aws" / "workload"
+        template = (self.REPOSITORY / "infra" / "aws" / "main.yaml").read_text(encoding="utf-8")
+        indent = " " * 10
+        for name, start, end in (
+            ("checksum.sh", "cat > /opt/ec528/workloads/checksum.sh <<'WORKLOAD'\n", f"\n{indent}WORKLOAD\n"),
+        ):
+            body = template.split(start, 1)[1].split(end, 1)[0]
+            installed = "\n".join(line[len(indent):] for line in body.split("\n")) + "\n"
+            self.assertEqual(installed.encode(), (workload / name).read_bytes())
+        self.assertIn(
+            "printf '%s\\n' 'EC528 approved workload payload' > /opt/ec528/inputs/demo-payload.txt",
+            template,
+        )
+        self.assertEqual(
+            (workload / "demo-payload.txt").read_bytes(), b"EC528 approved workload payload\n"
+        )
+
+    def test_experiments_embed_the_same_workload(self) -> None:
+        artifact = (self.REPOSITORY / "infra" / "aws" / "workload" / "checksum.sh").read_text()
+        embedded = artifact.replace("\n", "\\n")
+        for experiment in ("demo2_end_to_end.mjs", "ima_tamper.mjs"):
+            source = (self.REPOSITORY / "experiments" / experiment).read_text()
+            self.assertIn(embedded, source.replace("'\n      '", "").replace("',\n      '", ""), experiment)
