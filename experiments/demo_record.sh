@@ -205,13 +205,13 @@ pause "Open the dashboard"
 start_tunnel
 token=$(cat "$token_file")
 KEYLIME_MCP_URL=$mcp_url KEYLIME_MCP_TOKEN=$token KEYLIME_MCP_ALLOW_INSECURE_LOOPBACK=1 \
-  PYTHONPATH="$repository/src" "$python" experiments/live_demo.py --skip-confinement \
+  PYTHONPATH="$repository/src" "$python" -u experiments/live_demo.py --skip-confinement \
   >"$output/dashboard.log" 2>&1 &
 background_pids+=("$!")
 unset token
-for _attempt in $(seq 1 40); do grep -q 'Live demo:' "$output/dashboard.log" && break; sleep 0.5; done
-grep -q 'Live demo:' "$output/dashboard.log" || die "dashboard did not start (see $output/dashboard.log)"
-ok "$(grep 'Live demo:' "$output/dashboard.log")"
+for _attempt in $(seq 1 40); do grep -qi 'live demo:' "$output/dashboard.log" && break; sleep 0.5; done
+grep -qi 'live demo:' "$output/dashboard.log" || die "dashboard did not start (see $output/dashboard.log)"
+ok "$(grep -i 'live demo:' "$output/dashboard.log" | tail -n 1)"
 pause "When you have clicked through all six steps"
 stop_background
 
