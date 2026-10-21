@@ -177,7 +177,7 @@ SHA-256 digests, so no tokens or keys end up in Git.
 | Supports | "The checks fail closed." Covers receipt binding, replay, malformed input, FIFO and symlink handling, and stale or mismatched Keylime results. |
 | Command | `make ci PYTHON=.venv/bin/python` |
 | Expected runtime | about 2 minutes |
-| Expected output | Python `Ran 11 tests ... OK`; Node `pass 24`, `fail 0`, `skipped 1` on macOS (the Linux-only fd test), or `pass 25` on Linux |
+| Expected output | Python `Ran 13 tests ... OK`; Node `pass 35`, `fail 0`, `skipped 1` on macOS (the Linux-only fd test), or all 36 tests passing on Linux |
 
 ### Experiment 1: nono confinement
 
@@ -223,8 +223,12 @@ The 9 cases: `outbox_write_allowed`, `outbox_read_blocked`, `inbox_read_allowed`
 
 ### Results recorded for Demo 2
 
-All three result files were generated from commit `7de165c` with no uncommitted
-changes (`repository_dirty: false`) on 2026-10-19.
+Each result file records its exact source commit, dependency versions,
+timestamps, and whether the working tree was dirty. The refreshed continuous
+and IMA runs were generated from commit `7826c10` on 2026-10-20/21 with
+`repository_dirty: false`. The instance IDs below are historical evidence; the
+CloudFormation stack and all tagged EC2, EBS, and security-group resources were
+deleted after the runs.
 
 **Authorization** (`results/demo2-authorization.json`, 11/11):
 
@@ -243,7 +247,7 @@ changes (`repository_dirty: false`) on 2026-10-19.
 | `one_signer_expiry` | expired without execution |
 
 **Continuous end-to-end run on AWS** (`results/demo2-end-to-end.json`, 7/7,
-instance `i-05160ff6af3d988e9`, since terminated):
+instance `i-00cf93b48c76bef44`, terminated):
 
 | Scenario | Expected | Observed |
 | --- | --- | --- |
@@ -259,6 +263,17 @@ instance `i-05160ff6af3d988e9`, since terminated):
 allows the exact workload; the wrong target is denied; Keylime unavailable fails
 closed.
 
+**IMA runtime-integrity run** (`results/ima-tamper.json`, 5/5, same terminated
+instance):
+
+| Scenario | Observed |
+| --- | --- |
+| `ima_active_before_tamper` | kernel IMA policy active; Keylime status `PASS` |
+| `clean_node_allows_exact_workload` | HTTP 200; exact workload executed |
+| `unapproved_program_measured` | unexpected executable recorded in the IMA log |
+| `verifier_detects_unapproved_program` | Keylime changed to `FAIL` with `ima.validation.ima-ng.not_in_allowlist` in at most 2.2 seconds |
+| `approved_request_denied_after_tamper` | HTTP 500 fail-closed response; workload did not execute |
+
 ### What these results do not show
 
 - **swtpm is not a hardware root of trust.** It proves the Keylime protocol and
@@ -268,9 +283,11 @@ closed.
   A compromised instance could lie about itself.
 - **The three EMILIA signer keys are on one laptop.** This proves the 2-of-3
   protocol, not independent human approval.
-- **The only attestation failure tested is an outage.** We stopped the Keylime
-  agent. We did not test a measured-boot (PCR) mismatch or an IMA runtime
-  mismatch; no IMA policy is configured yet.
+- **IMA is real kernel measurement, but the TPM is emulated.** Linux IMA
+  records executed files, then a userspace emulator copies PCR 10 into swtpm.
+  Root on the node could forge this flow. The policy was generated from the
+  node at boot (trust on first use), and tmpfs and the SSM per-command script
+  directory are outside the measured set.
 - **There is a freshness window.** We accept attestation up to 30 seconds old.
   A node that fails inside that window is still trusted until the result goes
   stale. The outage scenario waits 35 seconds for this reason.
@@ -286,17 +303,12 @@ closed.
 - **The controller trusts the node's report.** The cloud MCP returns the
   attestation verdict and evidence digest itself, so the controller cannot
   independently check them.
-- **In the recorded cloud runs, the agent could read the controller's receipt
-  store.** The end-to-end and IMA experiments kept their working folders
-  (receipt store, action files, workload copies) in the macOS temp folder,
-  which nono's default rules let the sandbox read. The agent could not write
-  there, the signing keys exist only in memory, and the MCP token sits under
-  `build/`, which the sandbox cannot read. The 9/9 confinement check did not
-  catch this because it uses a different folder layout. Fixed afterwards: the
-  experiments now keep this state under `build/runs/`, and the end-to-end
-  experiment asks nono (`nono why`) to confirm that every controller-only path
-  is denied before the agent starts, refusing to run otherwise. The recorded
-  results predate this fix.
+- **A prior temp-folder layout exposed read access to controller state.** It was
+  fixed by moving experiment state under `build/runs/`. Before starting, the
+  current end-to-end experiment asks `nono why --json` to confirm that every
+  controller-only path is denied and fails closed otherwise. The refreshed
+  result records `controller_state_unreadable_by_sandbox` with seven paths
+  checked.
 - **nono enforcement was tested on macOS (Seatbelt) only.** The agent ran on the
   laptop; Linux Landlock confinement of the agent was not part of these runs.
 - **Small scale.** Each scenario ran once. The 20-trial and 50-run measurements
@@ -309,7 +321,7 @@ We are announcing these changes, as the course rules require:
 | Proposal milestone | Status | Change and reason |
 | --- | --- | --- |
 | Exact-action 2-of-3 authorization (`demo2_authorization.sh`) | **Met** | As planned, plus target-binding and restart-replay cases. |
-| Keylime enrollment with measured-boot and IMA runtime policy | **Partly met** | Real Keylime enrollment and attestation on a cloud node, with fail-closed outage handling. No measured-boot policy, no IMA runtime-probe mismatch. Moved to Demo 3 with NitroTPM. |
+| Keylime enrollment with measured-boot and IMA runtime policy | **Partly met** | Real Keylime enrollment plus a kernel IMA runtime-policy mismatch test is complete. Hardware-rooted measured boot remains Demo 3 work because Demo 2 uses swtpm. |
 | Quorum-controlled tenant bootstrap through Keylime secure payload | **Not met** | Not implemented; the node is configured at launch through CloudFormation instead. Re-scoped to Demo 3, or dropped if the pinned Keylime version cannot support it. |
-| Platform: MOC, or local KVM for this milestone | **Changed** | AWS EC2 with swtpm. *[TEAM: state why MOC was not used, and whether the mentor has approved AWS as the "similar platform".]* |
+| Platform: MOC, or local KVM for this milestone | **Changed** | AWS EC2 with swtpm was used because the team had AWS credits and Systems Manager access while the MOC integration was not ready. The platform substitution is disclosed here rather than treated as equivalent hardware attestation. |
 | Nono-confined agent request (planned for Demo 3) | **Started early** | Already part of the Demo 2 end-to-end run. Two real people approving from separate credentials is still Demo 3 work. |

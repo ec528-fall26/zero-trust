@@ -128,10 +128,11 @@ detection **met on a software TPM**; measured boot and secure-payload bootstrap
 **Say:**
 Against our proposal: authorization is done, and Keylime with tamper detection
 works on a software TPM. Measured boot and the secure-payload setup step move
-to Demo 3, and we used AWS instead of MOC *[TEAM: one-line reason]*. Next: a
-real NitroTPM chip, the checker on its own machine, two real people approving
-from separate devices, and repeated, timed trials. Every number today comes
-from a script in `experiments/` and a results file in `results/`.
+to Demo 3. We used AWS because the team had credits and Systems Manager access
+while the MOC integration was not ready. Next: a real NitroTPM chip, the
+checker on its own machine, two real people approving from separate devices,
+and repeated, timed trials. Every number today comes from a script in
+`experiments/` and a results file in `results/`.
 
 ---
 
@@ -150,7 +151,3 @@ from a script in `experiments/` and a results file in `results/`.
   `make jaeger` and `make trace-replay`.
 - **"What if a machine dies mid-run?"** The receipt is marked used and never
   retried automatically. Running something twice is worse than zero times.
-
-> **Before presenting:** the IMA and tracing results live on the
-> `claude/ima` and `claude/otel` branches. Merge them with this branch before
-> pushing `demo-2`, or slides 6–7 will cite files that aren't on the branch.
