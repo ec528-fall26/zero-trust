@@ -20,8 +20,8 @@ execution.
 ## Quick start
 
 ```bash
-git clone https://github.com/ithlambelle/zero-trust-cryptography.git
-cd zero-trust-cryptography
+git clone https://github.com/ec528-fall26/zero-trust.git
+cd zero-trust
 git checkout demo-2
 
 npm ci
