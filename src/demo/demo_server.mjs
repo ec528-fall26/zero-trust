@@ -52,9 +52,13 @@ function sendJson(response, status, body) {
   response.end(encoded);
 }
 
+// Only pages served by this loopback server may POST. Browsers treat
+// localhost and 127.0.0.1 as different origins, so accept both spellings.
 function sameOrigin(request, port) {
   const origin = request.headers.origin;
-  return origin === undefined || origin === `http://127.0.0.1:${port}`;
+  return origin === undefined
+    || origin === `http://127.0.0.1:${port}`
+    || origin === `http://localhost:${port}`;
 }
 
 export async function startDemoServer(options) {
