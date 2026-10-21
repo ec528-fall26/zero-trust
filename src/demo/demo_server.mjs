@@ -7,6 +7,12 @@ import { createDemoController } from './demo_controller.mjs';
 import { createKeylimeMcpHandler } from '../controller/keylime_mcp_client.mjs';
 
 const MAX_BODY_BYTES = 4096;
+// Recorded Jaeger exports the page may show. Fixed names only: no path from
+// the request ever reaches the filesystem.
+const RECORDED_TRACES = Object.freeze({
+  'end-to-end': 'otel-demo2-end-to-end.trace.json',
+  'ima-tamper': 'otel-ima-tamper.trace.json',
+});
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repository = path.resolve(moduleDirectory, '../..');
 
@@ -46,9 +52,13 @@ function sendJson(response, status, body) {
   response.end(encoded);
 }
 
+// Only pages served by this loopback server may POST. Browsers treat
+// localhost and 127.0.0.1 as different origins, so accept both spellings.
 function sameOrigin(request, port) {
   const origin = request.headers.origin;
-  return origin === undefined || origin === `http://127.0.0.1:${port}`;
+  return origin === undefined
+    || origin === `http://127.0.0.1:${port}`
+    || origin === `http://localhost:${port}`;
 }
 
 export async function startDemoServer(options) {
@@ -70,6 +80,7 @@ export async function startDemoServer(options) {
     stateDirectory,
   });
   const html = await readFile(path.join(repository, 'public', 'demo.html'));
+  const viewModule = await readFile(path.join(moduleDirectory, 'demo_view.mjs'));
   const server = createServer(async (request, response) => {
     try {
       if (request.method === 'GET' && request.url === '/') {
@@ -81,6 +92,29 @@ export async function startDemoServer(options) {
           'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
         });
         response.end(html);
+        return;
+      }
+      if (request.method === 'GET' && request.url === '/demo-view.js') {
+        response.writeHead(200, {
+          'Content-Type': 'text/javascript; charset=utf-8',
+          'Content-Length': viewModule.length,
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        response.end(viewModule);
+        return;
+      }
+      if (request.method === 'GET' && request.url.startsWith('/api/recorded-trace/')) {
+        const file = RECORDED_TRACES[request.url.slice('/api/recorded-trace/'.length)];
+        if (!file) {
+          sendJson(response, 404, { error: 'not_found' });
+          return;
+        }
+        try {
+          sendJson(response, 200, await readJsonFile(path.join(repository, 'results', 'traces', file), 2 * 1024 * 1024));
+        } catch {
+          sendJson(response, 404, { error: 'recording_unavailable' });
+        }
         return;
       }
       if (request.method === 'GET' && request.url === '/api/state') {

@@ -320,6 +320,7 @@ export async function createDemoController(options) {
     if (!['approved', 'missing', 'replay', 'tampered'].includes(mode)) {
       throw new TypeError('unknown execution mode');
     }
+    events.push({ stage: 'demo', outcome: 'request-received', scenario: mode, at: new Date().toISOString() });
     try {
       lastResponse = publicResponse(await dispatch('execute_approved_workload', args));
     } catch {
