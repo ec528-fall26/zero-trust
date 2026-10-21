@@ -119,6 +119,16 @@ nono --version
 The commands below use `.venv/bin/python`, because the system `python3` usually
 does not have `jsonschema`.
 
+**Where to put the checkout.** Clone it under your home folder (for example
+`~/ec528-demo`), not under `/tmp`, `/var`, or an iCloud-synced folder:
+
+- nono's built-in macOS rules let any sandboxed program read `/private/var`
+  (which holds the per-user temp folder) and read and write `/private/tmp`.
+  A checkout there makes the confinement check fail, and the end-to-end
+  experiment refuses to run (see Section 5).
+- In iCloud Drive (`~/Documents`, `~/Desktop`), loading the Node packages took
+  about 60 seconds instead of 0.1 seconds and stalled experiments.
+
 ### Cloud node (attestation and end-to-end experiments only)
 
 These experiments need an AWS account. On our account the instance cost a few
@@ -146,10 +156,11 @@ parameter in `infra/aws/main.yaml`.
 ./infra/aws/teardown.sh ec528-zero-trust-demo   # deletes everything when finished
 ```
 
-> **Known gap.** The experiments read the MCP bearer token from
-> `build/aws-keylime/mcp-token` (mode `0600`, ignored by Git). The token is
-> generated on the instance at `/etc/ec528-keylime-mcp-token`. Copying it to the
-> laptop is not yet scripted. This must be scripted before Demo 3.
+The experiments read the MCP bearer token from `build/aws-keylime/mcp-token`
+(mode `0600`, ignored by Git). `make fetch-token STACK=<stack>` copies it from
+the instance through Systems Manager. The token's value is therefore kept in
+the account's SSM command history; it is per instance and useless once the
+stack is torn down, but never display that command's output.
 
 ## 4. Running the experiments
 
@@ -275,6 +286,17 @@ closed.
 - **The controller trusts the node's report.** The cloud MCP returns the
   attestation verdict and evidence digest itself, so the controller cannot
   independently check them.
+- **In the recorded cloud runs, the agent could read the controller's receipt
+  store.** The end-to-end and IMA experiments kept their working folders
+  (receipt store, action files, workload copies) in the macOS temp folder,
+  which nono's default rules let the sandbox read. The agent could not write
+  there, the signing keys exist only in memory, and the MCP token sits under
+  `build/`, which the sandbox cannot read. The 9/9 confinement check did not
+  catch this because it uses a different folder layout. Fixed afterwards: the
+  experiments now keep this state under `build/runs/`, and the end-to-end
+  experiment asks nono (`nono why`) to confirm that every controller-only path
+  is denied before the agent starts, refusing to run otherwise. The recorded
+  results predate this fix.
 - **nono enforcement was tested on macOS (Seatbelt) only.** The agent ran on the
   laptop; Linux Landlock confinement of the agent was not part of these runs.
 - **Small scale.** Each scenario ran once. The 20-trial and 50-run measurements
