@@ -33,6 +33,21 @@ function digest(bytes) {
   return `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
 }
 
+function receiptEvidence(receipt) {
+  return {
+    receipt_id: receipt.payload.receipt_id,
+    created_at: receipt.payload.created_at,
+    subject: receipt.payload.subject,
+    claim: receipt.payload.claim,
+    context_hash: receipt.payload.assurance_proof.context_hash,
+    signers: receipt.payload.assurance_proof.signoffs.map((signoff) => ({
+      approver_key_id: signoff.approver_key_id,
+      key_class: signoff.key_class,
+    })),
+    receipt_sha256: digest(Buffer.from(JSON.stringify(receipt), 'utf8')),
+  };
+}
+
 async function commandOutput(command, args) {
   try {
     const { stdout } = await execFileAsync(command, args, {
@@ -197,7 +212,10 @@ async function main() {
       },
       action,
       scenarios,
-      verified_receipts: [verifiedReceipt],
+      // Preserve reconstructable decision evidence without publishing raw
+      // WebAuthn authenticator data or signatures. The digest binds this
+      // summary to the receipt that the experiment actually verified.
+      verified_receipt_summaries: [receiptEvidence(verifiedReceipt)],
       limitations: [...LIMITATIONS],
     };
     await writeResult(result);

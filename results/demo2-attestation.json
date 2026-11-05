@@ -2,9 +2,9 @@
   "schema_version": 1,
   "experiment": "demo2-attestation",
   "status": "pass",
-  "generated_at": "2026-10-19T18:42:26.410Z",
-  "repository_revision": "7de165c7160dc276695b0532a8f4b4b3aed2a51f",
-  "repository_dirty": false,
+  "generated_at": "2026-11-05T00:52:07.879Z",
+  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "repository_dirty": true,
   "versions": {
     "keylime": "7.14.1-5.el10_2.1",
     "nono": "nono 0.79.0",
@@ -12,12 +12,12 @@
   },
   "action": {
     "action_type": "workload.execute",
-    "operation": "checksum.sha256",
-    "target": "aws-keylime-demo-01",
     "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
     "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
-    "occurrence_id": "3df75267-5281-4cc9-9b10-3c95fbf99dee",
-    "policy_version": "demo-2.1"
+    "occurrence_id": "3baa96a2-7ea4-4b50-9746-91cac5559765",
+    "operation": "checksum.sha256",
+    "policy_version": "demo-2.1",
+    "target": "aws-keylime-demo-01"
   },
   "scenarios": [
     {
@@ -29,9 +29,11 @@
         "verdict": "trusted",
         "target": "aws-keylime-demo-01",
         "policy_version": "demo-2.1",
-        "occurrence_id": "3df75267-5281-4cc9-9b10-3c95fbf99dee",
-        "attested_at": "2026-10-19T18:42:25.000Z",
-        "evidence_digest": "sha256:c7654b5f0fb5803ba9680ff008b72972b8531c38f19bbd3687a8d05253e0d2b9"
+        "occurrence_id": "3baa96a2-7ea4-4b50-9746-91cac5559765",
+        "attested_at": "2026-11-05T00:52:06.000Z",
+        "age_seconds": 1.692,
+        "node_time": "2026-11-05T00:52:07.692Z",
+        "evidence_digest": "sha256:e19eda19d25fa055a04a2c0ac9065eb564808e98e7c36d3f673b8ac913441adc"
       },
       "workload": {
         "executed": true,

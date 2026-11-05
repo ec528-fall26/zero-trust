@@ -69,6 +69,9 @@ test('Keylime handler requires fresh PASS status and protected approved material
     const result = await handler(action);
     assert.equal(result.attestation.verdict, 'trusted');
     assert.equal(result.attestation.occurrence_id, action.occurrence_id);
+    // The node reports the age and clock reading it measured itself.
+    assert.equal(result.attestation.node_time, new Date(now).toISOString());
+    assert.ok(result.attestation.age_seconds >= 0 && result.attestation.age_seconds < 1);
     assert.equal(result.workload.executed, true);
     assert.equal(result.workload.artifact_sha256, action.artifact_sha256);
     assert.equal(calls[1].command, '/proc/self/fd/3');

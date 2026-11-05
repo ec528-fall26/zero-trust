@@ -9,6 +9,8 @@ import {
   createReceiptRequiredDispatcher,
   DurableReceiptStore,
 } from '../controller/receipt_required_mcp.mjs';
+import { approvalPolicyBundle } from '../keylime_mcp/policy_digest.mjs';
+import { SECURITY_PARAMETERS } from '../security_parameters.mjs';
 
 const APPROVER_DEFINITIONS = Object.freeze([
   Object.freeze({ role: 'operator', id: 'ep:approver:operator' }),
@@ -109,7 +111,7 @@ function issueReceipt({ action, issuer, approvers, rpId, origin, createdAt }) {
     subject: 'agent:ec528-demo',
     created_at: createdAt,
     claim: {
-      action_type: 'workload.execute',
+      action_type: action.action_type,
       outcome: 'allow_with_signoff',
       canonical_action: action,
       action_hash: approvalActionHash(action),
@@ -147,28 +149,30 @@ function publicResponse(response) {
 }
 
 function toolArguments(action) {
-  return {
-    operation: action.operation,
-    target: action.target,
-    artifact_sha256: action.artifact_sha256,
-    input_sha256: action.input_sha256,
-    occurrence_id: action.occurrence_id,
-    policy_version: action.policy_version,
-  };
+  return Object.fromEntries(Object.entries(action).filter(([name]) => name !== 'action_type'));
 }
 
 export async function createDemoController(options) {
   const {
-    action,
+    action: initialAction,
     artifactPath,
     inputPath,
     keylimeHandler = null,
     manifest,
     stateDirectory,
-    approvalWindowMs = 15 * 60 * 1_000,
+    approvalWindowMs = SECURITY_PARAMETERS.approval_window_sec * 1_000,
     receiptCreatedAt = null,
     now = () => Date.now(),
+    // Optional policy pinning.  With a Keylime policy digest the dispatcher only
+    // accepts the policy_version derived from that digest and its own approval
+    // policy.  bindPolicyVersion also rewrites the action's policy_version to
+    // that derived value, because it depends on keys generated just below.
+    keylimePolicySha256 = null,
+    bindPolicyVersion = false,
+    revocation = null,
+    toolName = 'execute_approved_workload',
   } = options;
+  let action = initialAction;
   const issuer = createIssuer();
   const approvers = APPROVER_DEFINITIONS.map(createApprover);
   const approverByRole = new Map(approvers.map((approver) => [approver.role, approver]));
@@ -196,11 +200,22 @@ export async function createDemoController(options) {
     mode: 'threshold',
     required: 2,
     distinct_humans: true,
-    window_sec: 900,
+    window_sec: SECURITY_PARAMETERS.approval_window_sec,
     approvers: approvers.map((approver) => ({
       role: approver.role,
       approver: approver.id,
     })),
+  };
+  const manifestAction = manifest.actions.find((entry) => entry?.match?.tool === toolName);
+  if (!manifestAction?.receipt_required || manifestAction.action_type !== action.action_type) {
+    throw new TypeError('tool is not bound to the requested receipt action');
+  }
+  const policyId = manifestAction.id;
+  const activeManifest = {
+    ...manifest,
+    actions: manifest.actions.filter((entry) => (
+      entry?.receipt_required !== true || entry?.match?.tool === toolName
+    )),
   };
   const store = await new DurableReceiptStore(
     path.join(stateDirectory, 'receipt-store'),
@@ -241,21 +256,43 @@ export async function createDemoController(options) {
 
   const activeKeylimeHandler = keylimeHandler || mockKeylimeHandler;
   const dispatch = await createReceiptRequiredDispatcher({
-    manifest,
+    manifest: activeManifest,
     handlers: {
-      execute_approved_workload: activeKeylimeHandler,
+      [toolName]: activeKeylimeHandler,
       get_request_status: async () => snapshot(),
     },
     trustedKeys: [issuer.publicKey],
     approverKeys,
     rpId,
     allowedOrigins: [origin],
-    quorumPolicies: { 'mcp.execute_approved_workload': quorumPolicy },
+    quorumPolicies: { [policyId]: quorumPolicy },
+    keylimePolicySha256,
+    revocation,
     store,
     audit: async (event) => {
       events.push({ stage: 'receipt-guard', ...event, at: new Date().toISOString() });
     },
   });
+
+  if (bindPolicyVersion) {
+    if (dispatch.expectedPolicyVersion === null) {
+      throw new TypeError('bindPolicyVersion requires keylimePolicySha256');
+    }
+    action = { ...action, policy_version: dispatch.expectedPolicyVersion };
+  }
+
+  function policy() {
+    return Object.freeze({
+      expected_policy_version: dispatch.expectedPolicyVersion,
+      approval_policy: approvalPolicyBundle({
+        trustedKeys: [issuer.publicKey],
+        approverKeys,
+        quorumPolicies: { [policyId]: quorumPolicy },
+        rpId,
+        allowedOrigins: [origin],
+      }),
+    });
+  }
 
   function snapshot() {
     const approvalExpired = approvalExpiresAt !== null
@@ -322,7 +359,7 @@ export async function createDemoController(options) {
     }
     events.push({ stage: 'demo', outcome: 'request-received', scenario: mode, at: new Date().toISOString() });
     try {
-      lastResponse = publicResponse(await dispatch('execute_approved_workload', args));
+      lastResponse = publicResponse(await dispatch(toolName, args));
     } catch {
       lastResponse = { status: 500, body: { rejected: { reason: 'effect_indeterminate' } } };
     }
@@ -340,5 +377,5 @@ export async function createDemoController(options) {
     return receipt === null ? null : structuredClone(receipt);
   }
 
-  return Object.freeze({ approve, evidence, execute, snapshot });
+  return Object.freeze({ approve, evidence, execute, policy, snapshot });
 }

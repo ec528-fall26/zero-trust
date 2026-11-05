@@ -1,14 +1,23 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-attestation ima-tamper jaeger trace-replay demo-record fetch-token ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift ima-tamper jaeger trace-replay demo-record fetch-token ci
 
 # Prefer the project virtualenv (it has jsonschema) and fall back to python3.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 check:
 	PYTHONPATH=src $(PYTHON) -m compileall -q src tests
+	bash -n experiments/*.sh infra/aws/*.sh infra/azure/*.sh infra/spire/*.sh
+	node --check src/controller/revocation.mjs
 	node --check src/controller/receipt_required_mcp.mjs
+	node --check src/controller/keylime_bootstrap_client.mjs
 	node --check src/controller/keylime_mcp_client.mjs
 	node --check src/keylime_mcp/attest_and_deploy.mjs
+	node --check src/keylime_mcp/config.mjs
+	node --check src/keylime_mcp/policy_digest.mjs
 	node --check src/keylime_mcp/server.mjs
+	node --check src/keylime_mcp/bootstrap_tenant.mjs
+	node --check src/security_parameters.mjs
+	node --check src/spire/mtls_proxy.mjs
+	node scripts/sync-security-manifest.mjs --check
 
 test-python:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
@@ -30,8 +39,25 @@ demo-no-browser:
 demo2-authorization:
 	./experiments/demo2_authorization.sh
 
+demo2-bootstrap:
+	./experiments/demo2_bootstrap.sh
+
 demo2-attestation:
 	./experiments/demo2_attestation.sh
+
+drift-policy:
+	./experiments/drift_policy.sh
+
+drift-time:
+	./experiments/drift_time.sh
+
+drift-revocation:
+	./experiments/drift_revocation.sh
+
+drift-identity:
+	./experiments/drift_identity.sh
+
+drift: drift-policy drift-time drift-revocation drift-identity
 
 # Needs the AWS stack and leaves its node in the failed state; tear down after.
 ima-tamper:

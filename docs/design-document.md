@@ -140,19 +140,41 @@ cents per run.
 | Region / AMI | `us-east-2`, `ami-0281f4b4279b17b5b` (official AlmaLinux OS 10 x86_64) |
 | Instance | `t3.small`, 16 GB encrypted gp3, auto-terminates after 4 hours |
 | Keylime | 7.14.1-5.el10_2.1 (verifier, registrar, tenant; Rust agent) |
-| swtpm | 0.9.0-5.el10 |
+| swtpm | 0.9.0-6.el10_2 (live run; development only) |
 | `cfn-lint` | run through `uvx cfn-lint` |
 
-The deploy script expects an AWS CLI profile named `ec528-deployer` that can
-create the stack. It also expects an existing EC2 instance profile that lets the
-node register with Systems Manager. The default name is
-`EC528ZeroTrustInstanceProfile`; set it with the `InstanceProfileName`
-parameter in `infra/aws/main.yaml`.
+The deploy script expects an authenticated AWS CLI profile named
+`ec528-deployer` that can create CloudFormation, EC2 and SSM resources. Create
+or select the account credentials first; never commit access keys:
+
+```bash
+aws configure sso --profile ec528-deployer
+aws sso login --profile ec528-deployer
+aws sts get-caller-identity --profile ec528-deployer
+```
+
+The EC2 node also needs an IAM instance profile so it can register with Systems
+Manager. The default is `EC528ZeroTrustInstanceProfile`. Validate it without
+changing AWS, or create its least-privilege SSM role explicitly:
+
+```bash
+AWS_PROFILE=<iam-administrator-profile> ./infra/aws/setup-prerequisites.sh
+AWS_PROFILE=<iam-administrator-profile> ./infra/aws/setup-prerequisites.sh --apply
+```
+
+The caller needs IAM permission to create the role/profile and attach the AWS
+managed `AmazonSSMManagedInstanceCore` policy. Override the name with the
+`InstanceProfileName` CloudFormation parameter if the course account already
+provides an equivalent profile. A restricted deployer without
+`iam:GetInstanceProfile` cannot validate whether the profile exists; the script
+reports that authorization boundary instead of incorrectly reporting it as
+missing.
 
 ```bash
 ./infra/aws/deploy.sh                 # validation only: lints the template, no charges
 ./infra/aws/deploy.sh --apply         # creates the instance (billable)
 ./infra/aws/open-tunnel.sh            # keep running: forwards localhost:3000 to the node
+make demo2-bootstrap                  # 2-of-3 receipt enrolls the staged Keylime tenant
 ./infra/aws/teardown.sh ec528-zero-trust-demo   # deletes everything when finished
 ```
 
@@ -177,7 +199,7 @@ SHA-256 digests, so no tokens or keys end up in Git.
 | Supports | "The checks fail closed." Covers receipt binding, replay, malformed input, FIFO and symlink handling, and stale or mismatched Keylime results. |
 | Command | `make ci PYTHON=.venv/bin/python` |
 | Expected runtime | about 2 minutes |
-| Expected output | Python `Ran 13 tests ... OK`; Node `pass 35`, `fail 0`, `skipped 1` on macOS (the Linux-only fd test), or all 36 tests passing on Linux |
+| Expected output | Python `Ran 25 tests ... OK`; Node `pass 59`, `fail 0`, `skipped 1` on macOS (the Linux-only fd test), or all 60 tests passing on Linux |
 
 ### Experiment 1: nono confinement
 
@@ -218,6 +240,35 @@ The 9 cases: `outbox_write_allowed`, `outbox_read_blocked`, `inbox_read_allowed`
 | Command | `PYTHON_BIN=.venv/bin/python node experiments/demo2_end_to_end.mjs` (opens its own SSM tunnel; also reads `AWS_PROFILE`, `AWS_REGION`, `AWS_STACK_NAME`, `KEYLIME_MCP_TOKEN_FILE`) |
 | Expected runtime | about 2 minutes. It deliberately stops the Keylime agent and waits for attestation to go stale. |
 | Expected output | `results/demo2-end-to-end.json` with `"status": "pass"`, 7 scenarios passing, and a timeline from `nono_profile_generated` to `readonly_inbox_status_observed` |
+
+### Experiment 5: policy digest pinning (local, no cloud)
+
+| | |
+| --- | --- |
+| Supports | "`policy_version` is derived from the Keylime policy and the approval policy. Changing the Keylime allowlist, the approver roster, the quorum threshold or window, or the issuer key makes the gate or the node refuse an action approved under the old policies." |
+| Command | `make drift-policy` (writes `results/drift-policy.json`) |
+| Expected runtime | under 5 seconds |
+| Expected output | `"status": "pass"` and 9 scenarios passing (listed in `results/drift-policy.json`) |
+
+### Experiment 6: time drift (local, no cloud)
+
+| | |
+| --- | --- |
+| Supports | "A receipt older than its lifetime (120 s by default) is refused. The node reports the attestation age it measured on its own clock. The controller refuses an age its timestamps do not support, and a node clock more than 5 seconds outside the interval the controller waited for the reply." |
+| Command | `make drift-time` (writes `results/drift-time.json`) |
+| Expected runtime | under 5 seconds |
+| Expected output | `"status": "pass"` and 9 scenarios passing |
+
+### Experiment 7: revocation at verify time (local, no cloud)
+
+| | |
+| --- | --- |
+| Supports | "A receipt that verifies offline is refused if one of its signers has been revoked since, and the check fails closed when the revocation list is missing, stale, forged or rolled back." |
+| Command | `make drift-revocation` (writes `results/drift-revocation.json`) |
+| Expected runtime | under 5 seconds |
+| Expected output | `"status": "pass"` and 9 scenarios passing |
+
+`make drift` runs Experiments 5 to 7 together.
 
 ## 5. Claims and limitations
 
@@ -321,7 +372,31 @@ We are announcing these changes, as the course rules require:
 | Proposal milestone | Status | Change and reason |
 | --- | --- | --- |
 | Exact-action 2-of-3 authorization (`demo2_authorization.sh`) | **Met** | As planned, plus target-binding and restart-replay cases. |
-| Keylime enrollment with measured-boot and IMA runtime policy | **Partly met** | Real Keylime enrollment plus a kernel IMA runtime-policy mismatch test is complete. Hardware-rooted measured boot remains Demo 3 work because Demo 2 uses swtpm. |
-| Quorum-controlled tenant bootstrap through Keylime secure payload | **Not met** | Not implemented; the node is configured at launch through CloudFormation instead. Re-scoped to Demo 3, or dropped if the pinned Keylime version cannot support it. |
+| Keylime enrollment with measured-boot and IMA runtime policy | **Implemented, hardware run pending** | Enrollment always attaches the generated IMA policy. On a NitroTPM/UEFI AMI, run `infra/aws/enable-hardware-tpm.sh` before bootstrap; it fails unless a hardware TPM and non-empty kernel boot event log exist, moves the agent off swtpm, and enables generation of the Keylime measured-boot reference policy. The existing swtpm evidence still proves IMA only; a NitroTPM run is required before claiming hardware-rooted measured boot. |
+| Quorum-controlled tenant bootstrap through Keylime secure payload | **Implemented, cloud rerun pending** | CloudFormation now stages the runtime policy and protected payload but leaves the tenant unenrolled. `demo2_bootstrap` requires a receipt bound to the agent, policy digest, payload digest and occurrence before the node-local root helper invokes `keylime_tenant --include`. Missing, one-signer, changed and replayed approvals fail before enrollment. |
 | Platform: MOC, or local KVM for this milestone | **Changed** | AWS EC2 with swtpm was used because the team had AWS credits and Systems Manager access while the MOC integration was not ready. The platform substitution is disclosed here rather than treated as equivalent hardware attestation. |
 | Nono-confined agent request (planned for Demo 3) | **Started early** | Already part of the Demo 2 end-to-end run. Two real people approving from separate credentials is still Demo 3 work. |
+
+## 6. Drift controls
+
+*Added after Demo 2, in response to the design analysis "State Drift Between Keylime and EMILIA Quorum". That analysis is a design study, not a description of an existing integration. These controls have been run locally (Experiments 5 to 7) but not on the AWS node.*
+
+Keylime vouches for the machine, EMILIA vouches for the humans, and the action runs later. Each check can be true at its own moment and false by the time the action runs. These controls narrow the gaps.
+
+| Control | What it does | Where | Setting |
+| --- | --- | --- | --- |
+| Policy digest pinning | `policy_version` becomes `pd1-` plus the first 60 hex characters of a SHA-256 over canonical JSON of the Keylime policy file digest and the approval policy (issuer keys, approver keys, quorum policies, relying party, origins). Any change gives a new version. The gate refuses another version with `policy_version_mismatch`. | `src/keylime_mcp/policy_digest.mjs`, `src/controller/policy_digest.py`, gate option `keylimePolicySha256`, watcher flags `--keylime-policy` and `--approval-policy`, node variables `KEYLIME_POLICY_FILE` and `KEYLIME_APPROVAL_POLICY_FILE` | Optional. The fixed label (`--policy-version`, `KEYLIME_POLICY_VERSION`) still works. |
+| Short receipt lifetime | A receipt is refused once older than `max_age_sec`. The window in which the two approvers must sign is separate and longer (900 s). | `public/.well-known/agent-actions.json`, `DEFAULT_RECEIPT_MAX_AGE_SEC` in `src/controller/emilia_adapter.py`, `manifestWithReceiptMaxAge` in `receipt_required_mcp.mjs` | 120 s (was 900 s). A test checks the manifest and the adapter agree. |
+| Node-reported attestation age and bounded skew | The node returns `age_seconds` and `node_time` from its own clock. The controller checks the age is consistent with the node's two timestamps and at most 30 s, and that `node_time` lies within 5 s of the interval in which the controller was waiting. | `src/keylime_mcp/attest_and_deploy.mjs`, `src/controller/keylime_mcp_client.mjs` | 30 s age, 5 s skew |
+| Revocation at verify time | The gate loads a signed revocation list before reserving a receipt. A receipt is refused if any signer is listed, or if the list is missing, unverifiable, older than 300 s, or older in sequence than one already seen. A refusal here does not burn the receipt. | `src/controller/revocation.mjs`, gate option `revocation` | Optional. Off unless a checker is passed. |
+| Post-request attestation | With `KEYLIME_REQUIRE_FRESH_ATTESTATION=1` the node reads the verifier's `attestation_count`, waits until it has risen by 2, then runs the workload. The first increase may be a quote already in flight when the request arrived; the second was requested by the verifier, with its own nonce, after the request. The controller refuses a result that lacks `fresh_after_request`. It fails closed on timeout (default 15 s), a status that stops passing, or a count that is missing or goes backwards. | `src/keylime_mcp/attest_and_deploy.mjs`, `src/controller/keylime_mcp_client.mjs`, `src/keylime_mcp/server.mjs` | Optional, off by default. Not yet run against a real Keylime node. |
+
+**What these controls do not do**
+
+- **Not deployed to AWS.** `infra/aws/install-mcp.sh` still sets the fixed label `KEYLIME_POLICY_VERSION=demo-2.1`, so the recorded cloud runs do not use policy pinning, and no revocation checker is configured. The node's Keylime policy is generated at boot, so the controller does not know its digest in advance. Deciding how it learns it is open work.
+- **No caller-chosen nonce.** Post-request attestation (above) shows that the verifier quoted the node again after the request, but the controller does not choose the nonce and cannot verify the quote itself. Without the option the node still reads Keylime's last periodic result, so the 30 second window in Section 5 remains. The option has unit tests only and is off in the AWS deploy.
+- **A node-side refusal still burns the approval.** The refusal happens after the receipt is reserved (`effect_indeterminate`). Experiment 5 shows this for a node whose Keylime policy changed.
+- **The controller trusts the node's report of its own age and clock.** A compromised node can lie about both. The consistency and skew checks catch misconfiguration and drift, not a malicious node.
+- **Receipt age uses the controller's clock.** A skewed controller clock is not detected.
+- **Revocation list limits.** The list authority is a local demo key and the list is served from memory. The highest sequence seen is kept in memory only, so a controller restart forgets it. A signer is refused whether the key was revoked before or after signing.
+- **Receipt lifetime and live demos.** With a 120 s lifetime, a narrator has two minutes between the second approval and the execute step. For a slower walkthrough use `manifestWithReceiptMaxAge(manifest, 900)`.

@@ -18,6 +18,7 @@ from typing import Final
 from jsonschema import Draft202012Validator
 
 from controller.emilia_adapter import receipt_required_challenge
+from controller.policy_digest import PolicyDigestError, policy_version_from_files
 
 MAX_REQUEST_BYTES: Final = 64 * 1024
 MAX_MATERIAL_BYTES: Final = 1024 * 1024 * 1024
@@ -387,7 +388,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input-root", type=Path, required=True)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--allowed-target", action="append", required=True)
-    parser.add_argument("--policy-version", required=True)
+    version_source = parser.add_mutually_exclusive_group(required=True)
+    version_source.add_argument("--policy-version")
+    version_source.add_argument(
+        "--keylime-policy",
+        type=Path,
+        help="Keylime policy file; policy_version is derived from its digest",
+    )
+    parser.add_argument(
+        "--approval-policy",
+        type=Path,
+        help="approval policy bundle (JSON); required with --keylime-policy",
+    )
     parser.add_argument(
         "--schema",
         type=Path,
@@ -398,11 +410,22 @@ def main(argv: list[str] | None = None) -> int:
         for directory in (args.outbox, args.inbox, args.storage, args.input_root):
             if not directory.resolve(strict=True).is_dir():
                 raise OutboxError("configured directory is invalid")
+        if args.keylime_policy is not None:
+            if args.approval_policy is None:
+                raise OutboxError("--approval-policy is required with --keylime-policy")
+            policy_version = policy_version_from_files(
+                keylime_policy=args.keylime_policy,
+                approval_policy=args.approval_policy,
+            )
+        else:
+            if args.approval_policy is not None:
+                raise OutboxError("--approval-policy is only valid with --keylime-policy")
+            policy_version = args.policy_version
         policy = ControllerPolicy(
             artifact=args.artifact,
             input_root=args.input_root,
             allowed_targets=frozenset(args.allowed_target),
-            policy_version=args.policy_version,
+            policy_version=policy_version,
         )
         results = run_once(
             outbox=args.outbox,
@@ -411,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
             inbox=args.inbox,
             policy=policy,
         )
-    except (OSError, OutboxError) as error:
+    except (OSError, OutboxError, PolicyDigestError) as error:
         print(f"outbox-watcher: {error}", file=sys.stderr)
         return 1
     print(json.dumps({"processed": len(results)}, sort_keys=True, separators=(",", ":")))

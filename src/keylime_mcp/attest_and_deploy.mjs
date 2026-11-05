@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process';
 import { open } from 'node:fs/promises';
 import net from 'node:net';
 
+import { SECURITY_PARAMETERS } from '../security_parameters.mjs';
+
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -181,6 +183,15 @@ function parseTenantStatus(stdout, expectedAgentId) {
   return { results, attestedAt: new Date(seconds * 1_000) };
 }
 
+function attestationCount(results) {
+  const value = results.attestation_count;
+  const count = typeof value === 'string' && /^[0-9]{1,15}$/.test(value) ? Number(value) : value;
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+    throw new Error('Keylime returned no usable attestation count');
+  }
+  return count;
+}
+
 export function createAttestAndDeploy(options) {
   const {
     statusCommand,
@@ -190,11 +201,31 @@ export function createAttestAndDeploy(options) {
     target,
     agentId,
     policyVersion,
-    maximumAttestationAgeSeconds = 30,
+    maximumAttestationAgeSeconds = SECURITY_PARAMETERS.attestation_max_age_sec,
     requiredOwnerUid = 0,
     now = () => Date.now(),
     commandRunner = runCommand,
+    // Require an attestation whose quote was requested after this call began.
+    // The verifier picks a fresh nonce for every poll, so once the successful
+    // attestation count has risen by two since our first read, the second quote
+    // was requested after the request arrived (the first may already have been
+    // in flight).  The caller cannot choose the nonce; the guarantee is about
+    // when the quote was asked for, not who asked.
+    requireFreshAttestation = false,
+    freshAttestationTimeoutSeconds = SECURITY_PARAMETERS.fresh_attestation_timeout_sec,
+    freshAttestationPollMilliseconds = 500,
+    sleep = (milliseconds) => new Promise((resolve) => { setTimeout(resolve, milliseconds); }),
   } = options;
+  if (!Number.isFinite(freshAttestationTimeoutSeconds) || freshAttestationTimeoutSeconds < 1
+      || freshAttestationTimeoutSeconds > 120
+      || !Number.isFinite(freshAttestationPollMilliseconds)
+      || freshAttestationPollMilliseconds < 50 || freshAttestationPollMilliseconds > 10_000) {
+    throw new TypeError('invalid fresh attestation timing');
+  }
+  if (!Number.isSafeInteger(maximumAttestationAgeSeconds)
+      || maximumAttestationAgeSeconds < 1 || maximumAttestationAgeSeconds > 86_400) {
+    throw new TypeError('invalid maximum attestation age');
+  }
   if (Boolean(statusCommand) === Boolean(statusSocket)) {
     throw new TypeError('configure exactly one of statusCommand or statusSocket');
   }
@@ -212,13 +243,32 @@ export function createAttestAndDeploy(options) {
         || !UUID_PATTERN.test(action.occurrence_id)) {
       throw new Error('action does not match the Keylime MCP policy');
     }
-    const { stdout } = statusSocket
-      ? await readStatusSocket(statusSocket)
-      : await commandRunner(statusCommand, [], {
-        timeout: 15_000,
-        maxBuffer: 256 * 1024,
-      });
-    const { results, attestedAt } = parseTenantStatus(stdout, agentId);
+    const readStatus = async () => {
+      const { stdout } = statusSocket
+        ? await readStatusSocket(statusSocket)
+        : await commandRunner(statusCommand, [], {
+          timeout: 15_000,
+          maxBuffer: 256 * 1024,
+        });
+      return parseTenantStatus(stdout, agentId);
+    };
+    let { results, attestedAt } = await readStatus();
+    let freshness = null;
+    if (requireFreshAttestation) {
+      const before = attestationCount(results);
+      const deadline = now() + freshAttestationTimeoutSeconds * 1_000;
+      let count = before;
+      while (count < before + 2) {
+        if (now() >= deadline) {
+          throw new Error('Keylime did not attest again after the request in time');
+        }
+        await sleep(freshAttestationPollMilliseconds);
+        ({ results, attestedAt } = await readStatus());
+        count = attestationCount(results);
+        if (count < before) throw new Error('Keylime attestation count went backwards');
+      }
+      freshness = { before, after: count };
+    }
     const current = now();
     if (attestedAt.getTime() > current + 5_000
         || current - attestedAt.getTime() > maximumAttestationAgeSeconds * 1_000) {
@@ -274,6 +324,16 @@ export function createAttestAndDeploy(options) {
         policy_version: policyVersion,
         occurrence_id: action.occurrence_id,
         attested_at: attestedAt.toISOString(),
+        // Age and clock reading come from the node's own clock, taken when the
+        // freshness check ran, so the controller never has to subtract
+        // timestamps that came from two different clocks.
+        ...(freshness ? {
+          fresh_after_request: true,
+          attestation_count_before: freshness.before,
+          attestation_count_after: freshness.after,
+        } : {}),
+        age_seconds: Math.round(Math.max(0, current - attestedAt.getTime())) / 1_000,
+        node_time: new Date(current).toISOString(),
         evidence_digest: `sha256:${crypto.createHash('sha256').update(evidenceMaterial).digest('hex')}`,
       },
       workload: {

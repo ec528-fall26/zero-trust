@@ -148,11 +148,10 @@ function keylimeRecoveryCommands(agentUuid, waitSeconds = 15) {
     'sleep 5',
     'systemctl start keylime_agent.service',
     'sleep 5',
-    `keylime_tenant -c delete -u ${agentUuid}`,
-    'if [ -f /var/lib/ec528/runtime-policy.json ]; then '
-      + `keylime_tenant -c add -u ${agentUuid} -t 127.0.0.1 -v 127.0.0.1 `
-      + '--runtime-policy /var/lib/ec528/runtime-policy.json; '
-      + `else keylime_tenant -c add -u ${agentUuid} -t 127.0.0.1 -v 127.0.0.1; fi`,
+    // Preserve the quorum-enrolled tenant and its pinned runtime policy.
+    // Keylime intentionally leaves an unreachable agent in terminal FAIL;
+    // reactivate resumes quotes without bypassing protected bootstrap.
+    `keylime_tenant -c reactivate -u ${agentUuid}`,
     `sleep ${waitSeconds}`,
     'systemctl is-active swtpm-keylime.service keylime_agent.service',
   ];
@@ -437,12 +436,14 @@ async function runExperiment() {
       manifest,
       stateDirectory: path.join(temporaryRoot, 'stopped-state'),
     });
-    stoppedController.approve('operator');
-    stoppedController.approve('security');
     await runSsm(['systemctl stop keylime_agent.service'], context);
     agentStopped = true;
     mark('keylime_agent_stopped', 'success');
     await new Promise((resolve) => setTimeout(resolve, 35_000));
+    // Approve after the wait: receipts only live 120 s, and this scenario must
+    // fail because Keylime attestation is stale, not because the receipt aged out.
+    stoppedController.approve('operator');
+    stoppedController.approve('security');
     startedAt = new Date().toISOString();
     snapshot = await scenarioSpan('keylime_agent_stopped', 'denied', () => stoppedController.execute('approved'));
     scenarios.push(scenarioRecord(

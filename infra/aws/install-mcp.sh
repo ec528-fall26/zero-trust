@@ -6,25 +6,35 @@ case "$agent_uuid" in
   ????????-????-????-????-????????????) ;;
   *) echo "a Keylime agent UUID is required" >&2; exit 64 ;;
 esac
+require_fresh_attestation=${2:-0}
+case "$require_fresh_attestation" in
+  0|1) ;;
+  *) echo "fresh attestation must be 0 or 1" >&2; exit 64 ;;
+esac
 
 for _attempt in $(seq 1 120); do
-  if [ "$(cat /var/lib/ec528-bootstrap-result 2>/dev/null || true)" = "keylime-ready" ]; then
-    break
-  fi
+  bootstrap_state=$(cat /var/lib/ec528-bootstrap-result 2>/dev/null || true)
+  case "$bootstrap_state" in keylime-bootstrap-pending|keylime-ready) break ;; esac
   sleep 5
 done
-[ "$(cat /var/lib/ec528-bootstrap-result 2>/dev/null || true)" = "keylime-ready" ] || {
-  echo "Keylime bootstrap did not become ready" >&2
+case "${bootstrap_state:-}" in keylime-bootstrap-pending|keylime-ready) ;; *)
+  echo "Keylime bootstrap staging did not become ready" >&2
   exit 75
-}
+esac
 
 cd /opt/ec528-zero-trust
 npm ci --omit=dev --ignore-scripts
-chown -R root:root /opt/ec528-zero-trust
-chmod -R go-w /opt/ec528-zero-trust
-
+attestation_max_age=$(node -e \
+  'const p=require("./config/security-parameters.json"); process.stdout.write(String(p.attestation_max_age_sec))')
+fresh_attestation_timeout=$(node -e \
+  'const p=require("./config/security-parameters.json"); process.stdout.write(String(p.fresh_attestation_timeout_sec))')
 id ec528-mcp >/dev/null 2>&1 || \
   useradd --system --home-dir /nonexistent --shell /sbin/nologin ec528-mcp
+# The uploaded archive can preserve restrictive modes from the developer's
+# machine.  Give only the MCP service group read/traverse access; retain root
+# ownership and never grant group or other write access.
+chown -R root:ec528-mcp /opt/ec528-zero-trust
+chmod -R u=rwX,g=rX,o= /opt/ec528-zero-trust
 umask 077
 openssl rand -hex 32 > /etc/ec528-keylime-mcp-token
 chown root:ec528-mcp /etc/ec528-keylime-mcp-token
@@ -65,12 +75,45 @@ TimeoutStartSec=20
 PrivateTmp=true
 UNIT
 
+cat > /etc/systemd/system/ec528-keylime-bootstrap.socket <<'UNIT'
+[Unit]
+Description=EC528 quorum-controlled Keylime tenant bootstrap socket
+
+[Socket]
+ListenStream=/run/ec528/keylime-bootstrap.sock
+SocketUser=root
+SocketGroup=ec528-mcp
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=1
+
+[Install]
+WantedBy=sockets.target
+UNIT
+
+cat > /etc/systemd/system/ec528-keylime-bootstrap@.service <<'UNIT'
+[Unit]
+Description=EC528 quorum-controlled Keylime tenant bootstrap
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/ec528-keylime-bootstrap
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+TimeoutStartSec=240
+PrivateTmp=true
+NoNewPrivileges=true
+UNIT
+
 cat > /etc/systemd/system/ec528-keylime-mcp.service <<SERVICE
 [Unit]
 Description=EC528 Keylime MCP backend
 After=network-online.target keylime_verifier.service keylime_agent.service ec528-keylime-status.socket
 Wants=network-online.target
 Requires=ec528-keylime-status.socket
+Requires=ec528-keylime-bootstrap.socket
 
 [Service]
 Type=simple
@@ -78,12 +121,15 @@ User=ec528-mcp
 Group=ec528-mcp
 Environment=KEYLIME_MCP_TOKEN_FILE=/etc/ec528-keylime-mcp-token
 Environment=KEYLIME_STATUS_SOCKET=/run/ec528/keylime-status.sock
+Environment=KEYLIME_BOOTSTRAP_SOCKET=/run/ec528/keylime-bootstrap.sock
 Environment=KEYLIME_WORKLOAD_ARTIFACT=/opt/ec528/workloads/checksum.sh
 Environment=KEYLIME_WORKLOAD_INPUT=/opt/ec528/inputs/demo-payload.txt
 Environment=KEYLIME_TARGET=aws-keylime-demo-01
 Environment=KEYLIME_AGENT_ID=$agent_uuid
 Environment=KEYLIME_POLICY_VERSION=demo-2.1
-Environment=KEYLIME_MAX_ATTESTATION_AGE_SECONDS=30
+Environment=KEYLIME_MAX_ATTESTATION_AGE_SECONDS=$attestation_max_age
+Environment=KEYLIME_REQUIRE_FRESH_ATTESTATION=$require_fresh_attestation
+Environment=KEYLIME_FRESH_ATTESTATION_TIMEOUT_SECONDS=$fresh_attestation_timeout
 ExecStart=/usr/bin/node /opt/ec528-zero-trust/src/keylime_mcp/server.mjs
 Restart=on-failure
 NoNewPrivileges=true
@@ -101,6 +147,7 @@ SERVICE
 
 systemctl daemon-reload
 systemctl enable --now ec528-keylime-status.socket
+systemctl enable --now ec528-keylime-bootstrap.socket
 systemctl enable --now ec528-keylime-mcp
 
 healthy=false
@@ -119,7 +166,7 @@ fi
 
 # Exercise the status path the MCP uses, as the MCP user, so a broken helper
 # fails the install instead of the first demo request.
-if ! runuser -u ec528-mcp -- /usr/bin/python3 -I -c '
+if [ "$bootstrap_state" = keylime-ready ] && ! runuser -u ec528-mcp -- /usr/bin/python3 -I -c '
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX)
 s.settimeout(20)
@@ -139,4 +186,3 @@ print(status["results"].get("attestation_status"))
   journalctl -u 'ec528-keylime-status@*' -n 50 --no-pager >&2 || true
   exit 75
 fi
-printf '%s\n' ready > /var/lib/ec528-bootstrap-result

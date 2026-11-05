@@ -24,9 +24,22 @@ if [ -n "$ssh_key" ]; then
   ssh_args+=(-i "$ssh_key")
 fi
 
-ssh "${ssh_args[@]}" "$ssh_user@$host" 'mkdir -p /tmp/ec528-mcp/src/keylime_mcp'
+ssh "${ssh_args[@]}" "$ssh_user@$host" \
+  'mkdir -p /tmp/ec528-mcp/src/keylime_mcp /tmp/ec528-mcp/config'
 scp "${ssh_args[@]}" "$repository/package.json" "$repository/package-lock.json" "$ssh_user@$host:/tmp/ec528-mcp/"
-scp "${ssh_args[@]}" "$repository/src/keylime_mcp/attest_and_deploy.mjs" "$repository/src/keylime_mcp/server.mjs" "$ssh_user@$host:/tmp/ec528-mcp/src/keylime_mcp/"
+scp "${ssh_args[@]}" \
+  "$repository/src/keylime_mcp/attest_and_deploy.mjs" \
+  "$repository/src/keylime_mcp/bootstrap_tenant.mjs" \
+  "$repository/src/keylime_mcp/config.mjs" \
+  "$repository/src/keylime_mcp/policy_digest.mjs" \
+  "$repository/src/keylime_mcp/server.mjs" \
+  "$ssh_user@$host:/tmp/ec528-mcp/src/keylime_mcp/"
+scp "${ssh_args[@]}" \
+  "$repository/src/security_parameters.mjs" \
+  "$ssh_user@$host:/tmp/ec528-mcp/src/"
+scp "${ssh_args[@]}" \
+  "$repository/config/security-parameters.json" \
+  "$ssh_user@$host:/tmp/ec528-mcp/config/"
 scp "${ssh_args[@]}" "$token_file" "$ssh_user@$host:/tmp/ec528-mcp-token"
 
 ssh "${ssh_args[@]}" "$ssh_user@$host" 'sudo sh -s' <<'REMOTE'
@@ -37,31 +50,64 @@ install -d -o root -g root -m 0755 /opt/ec528-mcp
 cp -R /tmp/ec528-mcp/. /opt/ec528-mcp/
 cd /opt/ec528-mcp
 npm ci --omit=dev --ignore-scripts
+attestation_max_age=$(node -e \
+  'const p=require("./config/security-parameters.json"); process.stdout.write(String(p.attestation_max_age_sec))')
+fresh_attestation_timeout=$(node -e \
+  'const p=require("./config/security-parameters.json"); process.stdout.write(String(p.fresh_attestation_timeout_sec))')
 chown -R root:root /opt/ec528-mcp
 chmod -R go-w /opt/ec528-mcp
 install -o root -g ec528-mcp -m 0640 /tmp/ec528-mcp-token /etc/ec528-keylime-mcp-token
-cat > /etc/sudoers.d/ec528-keylime-mcp <<'EOF'
-ec528-mcp ALL=(root) NOPASSWD: /usr/local/libexec/ec528-keylime-status
+rm -f /usr/local/bin/ec528-keylime-status-sudo /etc/sudoers.d/ec528-keylime-mcp
+cat > /etc/systemd/system/ec528-keylime-status.socket <<'EOF'
+[Unit]
+Description=EC528 Keylime status helper socket
+
+[Socket]
+ListenStream=/run/ec528/keylime-status.sock
+SocketUser=root
+SocketGroup=ec528-mcp
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=8
+
+[Install]
+WantedBy=sockets.target
 EOF
-chmod 0440 /etc/sudoers.d/ec528-keylime-mcp
-cat > /etc/systemd/system/ec528-keylime-mcp.service <<'EOF'
+cat > /etc/systemd/system/ec528-keylime-status@.service <<'EOF'
+[Unit]
+Description=EC528 Keylime status helper (one request)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/ec528-keylime-status
+StandardInput=null
+StandardOutput=socket
+StandardError=journal
+TimeoutStartSec=20
+PrivateTmp=true
+EOF
+cat > /etc/systemd/system/ec528-keylime-mcp.service <<EOF
 [Unit]
 Description=EC528 receipt-protected Keylime MCP backend
-After=network-online.target keylime_verifier.service keylime_agent.service
+After=network-online.target keylime_verifier.service keylime_agent.service ec528-keylime-status.socket
 Wants=network-online.target
+Requires=ec528-keylime-status.socket
 
 [Service]
 Type=simple
 User=ec528-mcp
 Group=ec528-mcp
 Environment=KEYLIME_MCP_TOKEN_FILE=/etc/ec528-keylime-mcp-token
-Environment=KEYLIME_STATUS_COMMAND=/usr/local/bin/ec528-keylime-status-sudo
+Environment=KEYLIME_STATUS_SOCKET=/run/ec528/keylime-status.sock
 Environment=KEYLIME_WORKLOAD_ARTIFACT=/opt/ec528/workloads/checksum.sh
 Environment=KEYLIME_WORKLOAD_INPUT=/opt/ec528/inputs/demo-payload.txt
 Environment=KEYLIME_TARGET=azure-vm-demo-01
 Environment=KEYLIME_AGENT_ID=d432fbb3-d2f1-4a97-9ef7-75bd81c00000
 Environment=KEYLIME_POLICY_VERSION=demo-2.1
-Environment=KEYLIME_MAX_ATTESTATION_AGE_SECONDS=30
+Environment=KEYLIME_MAX_ATTESTATION_AGE_SECONDS=$attestation_max_age
+Environment=KEYLIME_REQUIRE_FRESH_ATTESTATION=0
+Environment=KEYLIME_FRESH_ATTESTATION_TIMEOUT_SECONDS=$fresh_attestation_timeout
 ExecStart=/usr/bin/node /opt/ec528-mcp/src/keylime_mcp/server.mjs
 Restart=on-failure
 NoNewPrivileges=true
@@ -76,14 +122,8 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 [Install]
 WantedBy=multi-user.target
 EOF
-cat > /usr/local/bin/ec528-keylime-status-sudo <<'EOF'
-#!/bin/sh
-set -eu
-exec sudo /usr/local/libexec/ec528-keylime-status
-EOF
-chown root:root /usr/local/bin/ec528-keylime-status-sudo
-chmod 0755 /usr/local/bin/ec528-keylime-status-sudo
 systemctl daemon-reload
+systemctl enable --now ec528-keylime-status.socket
 systemctl enable --now ec528-keylime-mcp.service
 rm -rf /tmp/ec528-mcp /tmp/ec528-mcp-token
 curl --fail --silent http://127.0.0.1:3000/healthz

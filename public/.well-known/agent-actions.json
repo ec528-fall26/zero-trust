@@ -18,6 +18,35 @@
   },
   "actions": [
     {
+      "id": "mcp.bootstrap_keylime_tenant",
+      "match": {
+        "protocol": "mcp",
+        "tool": "bootstrap_keylime_tenant"
+      },
+      "action_type": "tenant.bootstrap",
+      "risk": "critical",
+      "receipt_required": true,
+      "assurance_class": "quorum",
+      "max_age_sec": 120,
+      "execution_binding": {
+        "required_fields": [
+          "action_type",
+          "target",
+          "agent_uuid",
+          "runtime_policy_sha256",
+          "payload_sha256",
+          "occurrence_id",
+          "policy_version"
+        ]
+      },
+      "quorum": {
+        "required": true,
+        "mode": "m_of_n",
+        "m": 2,
+        "distinct_humans": true
+      }
+    },
+    {
       "id": "mcp.execute_approved_workload",
       "match": {
         "protocol": "mcp",
@@ -27,7 +56,7 @@
       "risk": "critical",
       "receipt_required": true,
       "assurance_class": "quorum",
-      "max_age_sec": 900,
+      "max_age_sec": 120,
       "execution_binding": {
         "required_fields": [
           "action_type",

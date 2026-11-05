@@ -332,12 +332,119 @@ Resources:
             --output /var/lib/ec528/runtime-policy.json
           chmod 0600 /var/lib/ec528/runtime-policy.json
 
-          keylime_tenant -c delete -u "$agent_uuid" >/dev/null 2>&1 || true
-          keylime_tenant -c add -u "$agent_uuid" -t 127.0.0.1 -v 127.0.0.1 \
-            --runtime-policy /var/lib/ec528/runtime-policy.json
-          sleep 5
+          # Stage, but do not perform, tenant enrollment.  The fixed root helper
+          # below is reachable only through the MCP service's protected Unix
+          # socket.  The controller must first verify and reserve a 2-of-3
+          # EMILIA receipt bound to the policy and payload digests.
+          install -d -o root -g root -m 0700 /var/lib/ec528/bootstrap-payload
+          printf '%s\n' '{"purpose":"ec528-keylime-protected-bootstrap","version":1}' \
+            > /var/lib/ec528/bootstrap-payload/bootstrap.json
+          chmod 0600 /var/lib/ec528/bootstrap-payload/bootstrap.json
+          cat > /usr/local/libexec/ec528-keylime-bootstrap <<'BOOTSTRAP'
+          #!/usr/bin/python3 -I
+          import hashlib
+          import json
+          import pathlib
+          import re
+          import subprocess
+          import sys
 
-          printf '%s\n' keylime-ready > /var/lib/ec528-bootstrap-result
+          AGENT_UUID = "${AgentUuid}"
+          TARGET = "aws-keylime-demo-01"
+          POLICY_VERSION = "demo-2.1"
+          POLICY = pathlib.Path("/var/lib/ec528/runtime-policy.json")
+          PAYLOAD = pathlib.Path("/var/lib/ec528/bootstrap-payload/bootstrap.json")
+          RESULT = pathlib.Path("/var/lib/ec528/bootstrap-result.json")
+          DIGEST = re.compile(r"sha256:[a-f0-9]{64}")
+
+          def digest(path):
+              return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+          try:
+              raw = sys.stdin.buffer.readline(65537)
+              if len(raw) > 65536 or sys.stdin.buffer.read(1):
+                  raise ValueError("request bound exceeded")
+              action = json.loads(raw)
+              expected_fields = {
+                  "action_type", "target", "agent_uuid", "runtime_policy_sha256",
+                  "payload_sha256", "occurrence_id", "policy_version",
+              }
+              if not isinstance(action, dict) or set(action) != expected_fields:
+                  raise ValueError("invalid action fields")
+              if (action["action_type"] != "tenant.bootstrap"
+                      or action["target"] != TARGET
+                      or action["agent_uuid"] != AGENT_UUID
+                      or action["policy_version"] != POLICY_VERSION
+                      or not DIGEST.fullmatch(action["runtime_policy_sha256"])
+                      or not DIGEST.fullmatch(action["payload_sha256"])):
+                  raise ValueError("action is not pinned")
+              if action["runtime_policy_sha256"] != digest(POLICY):
+                  raise ValueError("runtime policy digest mismatch")
+              if action["payload_sha256"] != digest(PAYLOAD):
+                  raise ValueError("payload digest mismatch")
+              if RESULT.exists():
+                  previous = json.loads(RESULT.read_text(encoding="utf-8"))
+                  if previous.get("occurrence_id") != action["occurrence_id"]:
+                      raise ValueError("tenant already bootstrapped by another occurrence")
+                  print(json.dumps(previous, separators=(",", ":")))
+                  raise SystemExit(0)
+
+              command = [
+                  "keylime_tenant", "-c", "add", "-u", AGENT_UUID,
+                  "-t", "127.0.0.1", "-v", "127.0.0.1",
+                  "--runtime-policy", str(POLICY),
+                  "-f", str(PAYLOAD),
+              ]
+              boot_log = pathlib.Path("/sys/kernel/security/tpm0/binary_bios_measurements")
+              # This marker is deliberately absent in the swtpm template.  A
+              # hardware-TPM deployment must configure the Keylime agent to use
+              # that TPM before enabling measured boot; merely seeing /dev/tpmrm0
+              # is not enough when the agent is quoting swtpm.
+              hardware_tpm = pathlib.Path("/var/lib/ec528/hardware-tpm-active")
+              if hardware_tpm.exists() and pathlib.Path("/dev/tpmrm0").exists() and boot_log.is_file():
+                  mb_policy = pathlib.Path("/var/lib/ec528/measured-boot-policy.json")
+                  subprocess.run([
+                      "keylime-policy", "create", "measured-boot",
+                      "--eventlog-file", str(boot_log), "--output", str(mb_policy),
+                  ], check=True, timeout=120)
+                  command.extend(["--mb-policy", str(mb_policy)])
+              # Never let Keylime's human-readable logs share the socket with
+              # the single machine-readable response below.  The MCP treats
+              # any ambiguous response as an indeterminate effect and denies.
+              subprocess.run(command, check=True, timeout=180, capture_output=True)
+              result = {
+                  "status": "enrolled",
+                  "agent_uuid": AGENT_UUID,
+                  "runtime_policy_sha256": action["runtime_policy_sha256"],
+                  "payload_sha256": action["payload_sha256"],
+                  "occurrence_id": action["occurrence_id"],
+                  "measured_boot": pathlib.Path("/var/lib/ec528/measured-boot-policy.json").exists(),
+              }
+              temporary = RESULT.with_suffix(".tmp")
+              temporary.write_text(json.dumps(result, separators=(",", ":")), encoding="utf-8")
+              temporary.chmod(0o600)
+              temporary.replace(RESULT)
+              pathlib.Path("/var/lib/ec528-bootstrap-result").write_text("keylime-ready\n")
+              print(json.dumps(result, separators=(",", ":")))
+          except Exception as error:
+              print(f"bootstrap failed: {type(error).__name__}", file=sys.stderr)
+              print('{"status":"refused"}')
+              raise SystemExit(1)
+          BOOTSTRAP
+          chmod 0755 /usr/local/libexec/ec528-keylime-bootstrap
+
+          # The bootstrap helper itself is part of the trusted execution path.
+          # Rebuild the final runtime policy after every fixed root helper
+          # exists, otherwise its first execution is correctly rejected by
+          # IMA as a file missing from the allowlist.
+          keylime-policy create runtime \
+            --rootfs / \
+            --skip-path /proc,/sys,/dev,/run,/tmp,/var/tmp,/var/log,/var/cache,/var/lib/amazon,/var/lib/keylime,/var/lib/swtpm,/var/lib/ec528,/usr/share/doc,/usr/share/man,/usr/share/locale \
+            --ima-measurement-list /sys/kernel/security/ima/ascii_runtime_measurements \
+            --excludelist /var/lib/ec528/ima-exclude.txt \
+            --output /var/lib/ec528/runtime-policy.json
+          chmod 0600 /var/lib/ec528/runtime-policy.json
+          printf '%s\n' keylime-bootstrap-pending > /var/lib/ec528-bootstrap-result
 
 Outputs:
   InstanceId:

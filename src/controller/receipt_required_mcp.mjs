@@ -11,6 +11,10 @@ import {
 import path from 'node:path';
 
 import {
+  approvalPolicyBundle,
+  policyDigest,
+} from '../keylime_mcp/policy_digest.mjs';
+import {
   findActionRequirement,
   makeReceiptGate,
   parseReceiptCarrier,
@@ -100,6 +104,63 @@ function workloadSnapshot(args) {
     occurrence_id: occurrenceId,
     policy_version: policyVersion,
   });
+}
+
+function bootstrapSnapshot(args) {
+  if (!isPlainObject(args)) throw new TypeError('bootstrap_arguments_invalid');
+  const materialFields = [
+    'target',
+    'agent_uuid',
+    'runtime_policy_sha256',
+    'payload_sha256',
+    'occurrence_id',
+    'policy_version',
+  ];
+  const keys = Reflect.ownKeys(args);
+  const allowed = new Set([...materialFields, '__ep', 'emilia_receipt', 'emiliaReceipt']);
+  if (keys.some((key) => typeof key !== 'string' || !allowed.has(key))) {
+    throw new TypeError('bootstrap_arguments_invalid');
+  }
+  for (const field of materialFields) {
+    if (!keys.includes(field)) throw new TypeError(`missing_${field}`);
+  }
+  const target = validateText(dataValue(args, 'target'), 'target');
+  if (!TARGET_PATTERN.test(target)) throw new TypeError('invalid_target');
+  const agentUuid = dataValue(args, 'agent_uuid');
+  const occurrenceId = dataValue(args, 'occurrence_id');
+  if (typeof agentUuid !== 'string' || !UUID_PATTERN.test(agentUuid)) {
+    throw new TypeError('invalid_agent_uuid');
+  }
+  if (typeof occurrenceId !== 'string' || !UUID_PATTERN.test(occurrenceId)) {
+    throw new TypeError('invalid_occurrence_id');
+  }
+  const runtimePolicySha256 = dataValue(args, 'runtime_policy_sha256');
+  const payloadSha256 = dataValue(args, 'payload_sha256');
+  if (typeof runtimePolicySha256 !== 'string' || !DIGEST_PATTERN.test(runtimePolicySha256)) {
+    throw new TypeError('invalid_runtime_policy_sha256');
+  }
+  if (typeof payloadSha256 !== 'string' || !DIGEST_PATTERN.test(payloadSha256)) {
+    throw new TypeError('invalid_payload_sha256');
+  }
+  const policyVersion = dataValue(args, 'policy_version');
+  if (typeof policyVersion !== 'string' || !POLICY_PATTERN.test(policyVersion)) {
+    throw new TypeError('invalid_policy_version');
+  }
+  return Object.freeze({
+    action_type: 'tenant.bootstrap',
+    target,
+    agent_uuid: agentUuid,
+    runtime_policy_sha256: runtimePolicySha256,
+    payload_sha256: payloadSha256,
+    occurrence_id: occurrenceId,
+    policy_version: policyVersion,
+  });
+}
+
+function actionSnapshot(requirement, args) {
+  if (requirement.action_type === 'workload.execute') return workloadSnapshot(args);
+  if (requirement.action_type === 'tenant.bootstrap') return bootstrapSnapshot(args);
+  throw new TypeError('unsupported_action_type');
 }
 
 function receiptFrom(args, extra) {
@@ -247,6 +308,20 @@ export class DurableReceiptStore {
   }
 }
 
+// A copy of the manifest with a different receipt lifetime.  The default lives
+// in public/.well-known/agent-actions.json; use this for a deliberate "slow
+// approver" setting instead of editing the shared manifest.
+export function manifestWithReceiptMaxAge(manifest, seconds) {
+  if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86_400) {
+    throw new TypeError('receipt max age must be 1 to 86400 seconds');
+  }
+  const copy = structuredClone(manifest);
+  for (const action of copy.actions || []) {
+    if (action.receipt_required) action.max_age_sec = seconds;
+  }
+  return copy;
+}
+
 function refusal(reason, status = 428, body = null, header = '') {
   return {
     status,
@@ -265,6 +340,14 @@ export async function createReceiptRequiredDispatcher(options) {
     rpId,
     allowedOrigins = [],
     quorumPolicies = {},
+    // sha256: digest of the Keylime policy the node enforces.  When given, the
+    // dispatcher derives the one policy_version it accepts from this and from
+    // its own pinned approval policy, and refuses any other (policy drift).
+    keylimePolicySha256 = null,
+    // Optional revocation checker (see revocation.mjs).  When set, a receipt is
+    // refused before it is reserved if the list is unavailable, stale, rolled
+    // back, or names one of the receipt's signers.
+    revocation = null,
     audit = async () => {},
   } = options || {};
   const checkedManifest = validateActionRiskManifest(manifest);
@@ -290,6 +373,19 @@ export async function createReceiptRequiredDispatcher(options) {
     }
   }
 
+  const expectedPolicyVersion = keylimePolicySha256 === null
+    ? null
+    : policyDigest({
+      keylimePolicySha256,
+      approvalPolicy: approvalPolicyBundle({
+        trustedKeys,
+        approverKeys,
+        quorumPolicies,
+        rpId,
+        allowedOrigins,
+      }),
+    });
+
   const gates = new Map();
   function gateFor(requirement) {
     let gate = gates.get(requirement.id);
@@ -313,7 +409,7 @@ export async function createReceiptRequiredDispatcher(options) {
     return gate;
   }
 
-  return async function guardedCallTool(name, args = {}, extra = {}) {
+  async function guardedCallTool(name, args = {}, extra = {}) {
     const requirement = findActionRequirement(manifest, { protocol: 'mcp', tool: name });
     if (!requirement) {
       await audit({ decision: 'deny', reason: 'tool_not_registered', tool: String(name) });
@@ -337,13 +433,25 @@ export async function createReceiptRequiredDispatcher(options) {
 
     let observedAction;
     try {
-      observedAction = workloadSnapshot(args);
+      observedAction = actionSnapshot(requirement, args);
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'workload_arguments_invalid';
       await audit({ decision: 'deny', reason, tool: name });
       return refusal(reason);
     }
+    if (expectedPolicyVersion !== null
+        && observedAction.policy_version !== expectedPolicyVersion) {
+      await audit({ decision: 'deny', reason: 'policy_version_mismatch', tool: name });
+      return refusal('policy_version_mismatch');
+    }
     const receipt = receiptFrom(args, extra);
+    if (revocation !== null && receipt !== null) {
+      const status = await revocation.check(receipt);
+      if (!status.ok) {
+        await audit({ decision: 'deny', reason: status.reason, tool: name });
+        return refusal(status.reason);
+      }
+    }
     const gate = gateFor(requirement);
     const result = await gate.run(receipt, { observedAction }, async (check) => {
       await audit({
@@ -390,5 +498,11 @@ export async function createReceiptRequiredDispatcher(options) {
         },
       },
     };
-  };
+  }
+
+  Object.defineProperty(guardedCallTool, 'expectedPolicyVersion', {
+    value: expectedPolicyVersion,
+    enumerable: true,
+  });
+  return guardedCallTool;
 }

@@ -1,0 +1,33 @@
+{
+  "schema_version": "ec528-drift-identity-v1",
+  "started_at": "2026-11-05T00:19:43.614Z",
+  "finished_at": "2026-11-05T00:19:44.212Z",
+  "commit": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "repository_dirty": true,
+  "implementation": {
+    "transport": "TLS 1.3 mutual authentication",
+    "credential_source": "SPIFFE Helper file interface",
+    "trust_domain": "zt.demo"
+  },
+  "scenarios": [
+    {
+      "scenario": "SPIFFE IDs are validated and certificate matching is exact",
+      "expected": "pass",
+      "observed": "pass",
+      "passed": true
+    },
+    {
+      "scenario": "mTLS proxies require both the local token and exact workload identities",
+      "expected": "pass",
+      "observed": "pass",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "raw_output_sha256": "8c05ac9bd6c4d168ff2bafc9f29756ef74a176bbea733cceb61df4ef9548925d",
+  "limitations": [
+    "This local harness uses an ephemeral test CA and does not claim that a SPIRE agent issued the certificates.",
+    "A deployed run still requires Linux SPIRE server and agent services and AWS IID node attestation.",
+    "SPIFFE authenticates workloads; Keylime and EMILIA remain separate attestation and authorization checks."
+  ]
+}

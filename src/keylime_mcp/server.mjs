@@ -11,6 +11,10 @@ import {
 import * as z from 'zod/v4';
 
 import { createAttestAndDeploy } from './attest_and_deploy.mjs';
+import { createBootstrapTenant } from './bootstrap_tenant.mjs';
+import { booleanSetting, integerSetting } from './config.mjs';
+import { policyVersionFromFiles } from './policy_digest.mjs';
+import { SECURITY_PARAMETERS } from '../security_parameters.mjs';
 
 const actionSchema = z.object({
   action_type: z.literal('workload.execute'),
@@ -18,6 +22,16 @@ const actionSchema = z.object({
   target: z.string().min(1).max(256),
   artifact_sha256: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   input_sha256: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  occurrence_id: z.string().uuid(),
+  policy_version: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
+}).strict();
+
+const bootstrapSchema = z.object({
+  action_type: z.literal('tenant.bootstrap'),
+  target: z.string().min(1).max(256),
+  agent_uuid: z.string().uuid(),
+  runtime_policy_sha256: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  payload_sha256: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   occurrence_id: z.string().uuid(),
   policy_version: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
 }).strict();
@@ -42,7 +56,7 @@ function authorized(request, expectedDigest) {
   return crypto.timingSafeEqual(actual, expectedDigest);
 }
 
-function createMcpServer(handler) {
+function createMcpServer(handler, bootstrapHandler) {
   const server = new McpServer({ name: 'ec528-keylime', version: '0.1.0' });
   server.registerTool(
     'attest_and_deploy',
@@ -66,7 +80,49 @@ function createMcpServer(handler) {
       }
     },
   );
+  server.registerTool(
+    'bootstrap_keylime_tenant',
+    {
+      description: 'Enroll the pinned Keylime agent only after exact-action quorum approval.',
+      inputSchema: bootstrapSchema,
+    },
+    async (action) => {
+      try {
+        const result = await bootstrapHandler(action);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      } catch {
+        process.stderr.write('keylime-mcp: bootstrap_keylime_tenant refused\n');
+        return {
+          content: [{ type: 'text', text: 'Keylime tenant bootstrap refused.' }],
+          isError: true,
+        };
+      }
+    },
+  );
   return server;
+}
+
+// The policy_version this node accepts.  Preferred: derive it from the Keylime
+// policy file the node enforces plus the controller's approval policy bundle,
+// so a change to either one changes the version.  The fixed label is kept for
+// existing deployments.
+async function configuredPolicyVersion() {
+  const keylimePolicyPath = process.env.KEYLIME_POLICY_FILE;
+  const approvalPolicyPath = process.env.KEYLIME_APPROVAL_POLICY_FILE;
+  const label = process.env.KEYLIME_POLICY_VERSION;
+  if (keylimePolicyPath || approvalPolicyPath) {
+    if (!keylimePolicyPath || !approvalPolicyPath) {
+      throw new Error('KEYLIME_POLICY_FILE and KEYLIME_APPROVAL_POLICY_FILE are both required');
+    }
+    if (label) {
+      throw new Error('set KEYLIME_POLICY_VERSION or the policy files, not both');
+    }
+    return policyVersionFromFiles({ keylimePolicyPath, approvalPolicyPath });
+  }
+  return label;
 }
 
 async function main() {
@@ -80,13 +136,31 @@ async function main() {
     inputPath: process.env.KEYLIME_WORKLOAD_INPUT,
     target: process.env.KEYLIME_TARGET,
     agentId: process.env.KEYLIME_AGENT_ID,
-    policyVersion: process.env.KEYLIME_POLICY_VERSION,
-    maximumAttestationAgeSeconds: Number.parseInt(
-      process.env.KEYLIME_MAX_ATTESTATION_AGE_SECONDS || '30',
-      10,
+    policyVersion: await configuredPolicyVersion(),
+    requireFreshAttestation: booleanSetting(
+      process.env.KEYLIME_REQUIRE_FRESH_ATTESTATION,
+      'KEYLIME_REQUIRE_FRESH_ATTESTATION',
+      false,
+    ),
+    freshAttestationTimeoutSeconds: integerSetting(
+      process.env.KEYLIME_FRESH_ATTESTATION_TIMEOUT_SECONDS,
+      'KEYLIME_FRESH_ATTESTATION_TIMEOUT_SECONDS',
+      SECURITY_PARAMETERS.fresh_attestation_timeout_sec,
+      1,
+      120,
+    ),
+    maximumAttestationAgeSeconds: integerSetting(
+      process.env.KEYLIME_MAX_ATTESTATION_AGE_SECONDS,
+      'KEYLIME_MAX_ATTESTATION_AGE_SECONDS',
+      SECURITY_PARAMETERS.attestation_max_age_sec,
+      1,
+      86_400,
     ),
   });
-  const webHandler = createMcpHandler(() => createMcpServer(handler));
+  const bootstrapHandler = createBootstrapTenant({
+    socketPath: process.env.KEYLIME_BOOTSTRAP_SOCKET || '/run/ec528/keylime-bootstrap.sock',
+  });
+  const webHandler = createMcpHandler(() => createMcpServer(handler, bootstrapHandler));
   const nodeHandler = toNodeHandler(webHandler, {
     maxRequestBodySize: 128 * 1024,
     onerror: () => {

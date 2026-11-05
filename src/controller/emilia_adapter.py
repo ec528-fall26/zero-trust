@@ -8,6 +8,8 @@ import re
 from collections.abc import Mapping
 from typing import Final
 
+from security_parameters import SECURITY_PARAMETERS
+
 ACTION_TYPE: Final = "workload.execute"
 MANIFEST_URL: Final = "/.well-known/agent-actions.json"
 REQUIRED_FIELDS: Final = (
@@ -19,6 +21,8 @@ REQUIRED_FIELDS: Final = (
     "occurrence_id",
     "policy_version",
 )
+# The manifest is generated from the same policy and a test rejects drift.
+DEFAULT_RECEIPT_MAX_AGE_SEC: Final = SECURITY_PARAMETERS["receipt_max_age_sec"]
 DIGEST_PATTERN: Final = re.compile(r"^sha256:[a-f0-9]{64}$")
 TARGET_PATTERN: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 UUID_PATTERN: Final = re.compile(
@@ -68,7 +72,12 @@ def action_hash(action: Mapping[str, object]) -> str:
     return f"sha256:{hashlib.sha256(canonical_action_bytes(action)).hexdigest()}"
 
 
-def receipt_required_challenge(action: Mapping[str, object]) -> dict[str, object]:
+def receipt_required_challenge(
+    action: Mapping[str, object],
+    max_age_sec: int = DEFAULT_RECEIPT_MAX_AGE_SEC,
+) -> dict[str, object]:
+    if not isinstance(max_age_sec, int) or isinstance(max_age_sec, bool) or not 1 <= max_age_sec <= 86_400:
+        raise EmiliaAdapterError("receipt max age is invalid")
     observed_hash = action_hash(action)
     return {
         "status": 428,
@@ -78,7 +87,7 @@ def receipt_required_challenge(action: Mapping[str, object]) -> dict[str, object
             "action_hash": observed_hash,
             "assurance_class": "quorum",
             "manifest": MANIFEST_URL,
-            "max_age_sec": 900,
+            "max_age_sec": max_age_sec,
             "profile": "EP-RECEIPT-v1",
             "proof_header": "X-EMILIA-Receipt",
             "quorum": {

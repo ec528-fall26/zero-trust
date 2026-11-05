@@ -450,7 +450,10 @@ test('the production profile accepts a real 2-of-3 quorum receipt', async () => 
       approverKeys,
       rpId,
       allowedOrigins: [origin],
-      quorumPolicies: { 'mcp.execute_approved_workload': quorumPolicy },
+      quorumPolicies: {
+        'mcp.execute_approved_workload': quorumPolicy,
+        'mcp.bootstrap_keylime_tenant': quorumPolicy,
+      },
       store,
     });
     const receipt = signQuorumReceipt(
