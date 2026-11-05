@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "experiment": "drift-time",
+  "status": "pass",
+  "generated_at": "2026-11-05T00:19:43.372Z",
+  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "repository_dirty": true,
+  "versions": {
+    "nono": "nono 0.79.0",
+    "node": "v24.11.0",
+    "emilia_require_receipt": "0.9.0"
+  },
+  "receipt_max_age_sec": 120,
+  "scenarios": [
+    {
+      "name": "receipt_30s_old_executes",
+      "passed": true,
+      "observed": "executed_once",
+      "max_age_sec": 120
+    },
+    {
+      "name": "receipt_150s_old_refused",
+      "passed": true,
+      "observed": "receipt_expired",
+      "max_age_sec": 120
+    },
+    {
+      "name": "slow_approver_setting_accepts_150s",
+      "passed": true,
+      "observed": "executed_once",
+      "max_age_sec": 900
+    },
+    {
+      "name": "fresh_attestation_accepted",
+      "passed": true,
+      "observed": "accepted",
+      "reported_age_seconds": 5.348,
+      "measured_skew_seconds": 0
+    },
+    {
+      "name": "stale_attestation_refused_by_node",
+      "passed": true,
+      "observed": "node_refused_workload_not_run",
+      "attestation_age_seconds": 45
+    },
+    {
+      "name": "age_not_supported_by_timestamps_refused",
+      "passed": true,
+      "observed": "age_inconsistent_with_timestamps"
+    },
+    {
+      "name": "node_clock_ahead_60s_refused",
+      "passed": true,
+      "observed": "clock_skew_refused",
+      "injected_offset_seconds": 60,
+      "measured_skew_seconds": 60
+    },
+    {
+      "name": "node_clock_behind_60s_refused",
+      "passed": true,
+      "observed": "clock_skew_refused",
+      "injected_offset_seconds": -60,
+      "measured_skew_seconds": 60
+    },
+    {
+      "name": "slow_workload_not_flagged_as_skew",
+      "passed": true,
+      "observed": "accepted",
+      "measured_skew_seconds": 0
+    }
+  ],
+  "limitations": [
+    "The node handler is the real attest-and-deploy code, but the Keylime status it reads is a fixed PASS document and the clock offsets are injected. No TPM, Keylime service or second machine is involved.",
+    "Receipt age is checked by the EMILIA gate against the controller clock. A skewed controller clock is not detected by this experiment.",
+    "The controller trusts the node to report its own age and clock honestly. A compromised node can lie about both, which is why the age is only checked for consistency, not trusted for security.",
+    "Approver and issuer keys are ephemeral local demo keys on one machine."
+  ]
+}

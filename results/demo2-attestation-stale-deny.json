@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-attestation",
+  "status": "pass",
+  "generated_at": "2026-11-05T00:53:41.200Z",
+  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "repository_dirty": true,
+  "versions": {
+    "keylime": "7.14.1-5.el10_2.1",
+    "nono": "nono 0.79.0",
+    "tpm_type": "swtpm"
+  },
+  "action": {
+    "action_type": "workload.execute",
+    "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
+    "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+    "occurrence_id": "3baa96a2-7ea4-4b50-9746-91cac5559765",
+    "operation": "checksum.sha256",
+    "policy_version": "demo-2.1",
+    "target": "aws-keylime-demo-01"
+  },
+  "scenarios": [
+    {
+      "name": "failed_attestation_blocks_workload",
+      "passed": true,
+      "observed": "denied"
+    }
+  ],
+  "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.",
+    "The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval."
+  ]
+}
