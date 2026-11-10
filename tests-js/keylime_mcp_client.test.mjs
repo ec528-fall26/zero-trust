@@ -7,6 +7,7 @@ import {
   createKeylimeMcpHandler,
   validateKeylimeResult,
 } from '../src/controller/keylime_mcp_client.mjs';
+import { createPermitFixture } from '../experiments/permit_fixture.mjs';
 
 const action = Object.freeze({
   action_type: 'workload.execute',
@@ -163,17 +164,52 @@ test('invalid timing policy fails closed before a Keylime call', () => {
 
 test('Keylime MCP handler closes its client and returns validated structured output', async () => {
   let closed = false;
+  let sent;
+  const permits = createPermitFixture({ target: action.target, agentId: 'agent-test' });
   const handler = createKeylimeMcpHandler({
     endpoint: 'https://keylime.example.test/mcp',
     token: 'a'.repeat(64),
+    permitSigner: permits.signer,
     clientFactory: async () => ({
-      callTool: async () => ({ structuredContent: acceptedResult() }),
+      callTool: async ({ arguments: toolArguments }) => {
+        sent = toolArguments;
+        return { structuredContent: acceptedResult() };
+      },
       close: async () => { closed = true; },
     }),
   });
-  const result = await handler(action);
+  const result = await handler(action, { receiptId: 'receipt-1' });
   assert.equal(result.attestation.verdict, 'trusted');
   assert.equal(closed, true);
+  const { permit, ...sentAction } = sent;
+  assert.deepEqual(sentAction, action);
+  assert.equal(permits.verifier.verify(permit, { tool: 'attest_and_deploy', action }).target, action.target);
+});
+
+test('the Keylime MCP client cannot be built without a permit signer', () => {
+  assert.throws(
+    () => createKeylimeMcpHandler({
+      endpoint: 'https://keylime.example.test/mcp',
+      token: 'a'.repeat(64),
+    }),
+    /permit signer is required/,
+  );
+});
+
+test('the Keylime MCP client sends nothing without a verified receipt', async () => {
+  let calls = 0;
+  const permits = createPermitFixture({ target: action.target, agentId: 'agent-test' });
+  const handler = createKeylimeMcpHandler({
+    endpoint: 'https://keylime.example.test/mcp',
+    token: 'a'.repeat(64),
+    permitSigner: permits.signer,
+    clientFactory: async () => ({
+      callTool: async () => { calls += 1; return { structuredContent: acceptedResult() }; },
+      close: async () => {},
+    }),
+  });
+  await assert.rejects(handler(action), /failed closed/);
+  assert.equal(calls, 0);
 });
 
 test('plain HTTP is refused for a non-loopback Keylime MCP server', () => {
@@ -187,13 +223,15 @@ test('plain HTTP is refused for a non-loopback Keylime MCP server', () => {
 });
 
 test('Keylime MCP transport failure is converted to a fail-closed decision', async () => {
+  const permits = createPermitFixture({ target: action.target, agentId: 'agent-test' });
   const handler = createKeylimeMcpHandler({
     endpoint: 'https://keylime.example.test/mcp',
     token: 'a'.repeat(64),
+    permitSigner: permits.signer,
     clientFactory: async () => ({
       callTool: async () => { throw new Error('verifier unavailable'); },
       close: async () => {},
     }),
   });
-  await assert.rejects(handler(action), /failed closed/);
+  await assert.rejects(handler(action, { receiptId: 'receipt-1' }), /failed closed/);
 });

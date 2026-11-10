@@ -1,5 +1,7 @@
 import net from 'node:net';
 
+import { PRE_ENROLLMENT_EPOCH, PermitRefused } from './permit.mjs';
+
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -16,7 +18,14 @@ function validAction(action) {
     && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(action.policy_version);
 }
 
-export function createBootstrapTenant({ socketPath, timeoutMilliseconds = 120_000 } = {}) {
+export function createBootstrapTenant({
+  socketPath,
+  permitVerifier,
+  timeoutMilliseconds = 120_000,
+} = {}) {
+  if (typeof permitVerifier?.verify !== 'function') {
+    throw new TypeError('a permit verifier is required');
+  }
   if (typeof socketPath !== 'string' || !socketPath.startsWith('/')) {
     throw new TypeError('an absolute Keylime bootstrap socket path is required');
   }
@@ -24,8 +33,15 @@ export function createBootstrapTenant({ socketPath, timeoutMilliseconds = 120_00
       || timeoutMilliseconds < 1_000 || timeoutMilliseconds > 300_000) {
     throw new TypeError('invalid Keylime bootstrap timeout');
   }
-  return async function bootstrapTenant(action) {
+  return async function bootstrapTenant(action, permit) {
     if (!validAction(action)) throw new Error('bootstrap action is invalid');
+    const verifiedPermit = permitVerifier.verify(permit, {
+      tool: 'bootstrap_keylime_tenant',
+      action,
+    });
+    if (verifiedPermit.enrollment_epoch !== PRE_ENROLLMENT_EPOCH) {
+      throw new PermitRefused('enrollment_epoch_mismatch');
+    }
     const request = Buffer.from(`${JSON.stringify(action)}\n`, 'utf8');
     const response = await new Promise((resolve, reject) => {
       const socket = net.createConnection({ path: socketPath });

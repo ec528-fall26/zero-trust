@@ -62,7 +62,8 @@ flowchart LR
 | EMILIA adapter and demo signers | `src/controller/emilia_adapter.py`, `src/demo/demo_controller.mjs` | Builds the action that approvers sign and issues 2-of-3 quorum receipts with three locally generated demo keys. |
 | Receipt-required dispatcher | `src/controller/receipt_required_mcp.mjs` | Uses `@emilia-protocol/require-receipt` 0.9.0. Refuses with HTTP 428 unless a pinned issuer's receipt matches the exact action hash. Reserves the receipt in a durable store before the effect and burns it if the outcome is uncertain. |
 | Keylime MCP client | `src/controller/keylime_mcp_client.mjs` | Calls the cloud MCP with a bearer token over HTTPS or a tunnelled loopback. Rejects stale, future-dated, or mismatched attestation results. |
-| Keylime MCP server | `src/keylime_mcp/server.mjs`, `attest_and_deploy.mjs` | Runs on the node. Requires a fresh `PASS` for the configured agent UUID, checks workload and input digests, then runs the workload from file descriptors 3 and 4. |
+| Keylime MCP server | `src/keylime_mcp/server.mjs`, `attest_and_deploy.mjs` | Runs on the node. Requires a valid launch permit, a fresh `PASS` for the configured agent UUID and a matching enrollment epoch, checks workload and input digests, records the occurrence in its launch ledger, then runs the workload from file descriptors 3 and 4. |
+| Launch permits and ledger | `src/controller/permit_signer.mjs`, `src/keylime_mcp/permit.mjs`, `launch_ledger.mjs` | After verifying a receipt, the controller signs a 10-second Ed25519 permit bound to the action, tool, target, agent, enrollment epoch and receipt. The node holds only the public key and refuses a launch without a valid permit. Its ledger (atomic `mkdir`, then fsync) allows each `occurrence_id` to launch at most once, across concurrency and restarts. The bearer token now only controls who may connect. |
 | AWS deployment | `infra/aws/` | CloudFormation template, deploy, tunnel, and teardown scripts. Access is through Systems Manager only. |
 
 ## 2. Design decisions
@@ -199,7 +200,7 @@ SHA-256 digests, so no tokens or keys end up in Git.
 | Supports | "The checks fail closed." Covers receipt binding, replay, malformed input, FIFO and symlink handling, and stale or mismatched Keylime results. |
 | Command | `make ci PYTHON=.venv/bin/python` |
 | Expected runtime | about 2 minutes |
-| Expected output | Python `Ran 25 tests ... OK`; Node `pass 59`, `fail 0`, `skipped 1` on macOS (the Linux-only fd test), or all 60 tests passing on Linux |
+| Expected output | Python `Ran 38 tests ... OK`; Node all 118 passing on Linux, with `fail 0`. The node-enforcement and fd tests need Linux and are skipped on macOS. |
 
 ### Experiment 1: nono confinement
 
@@ -362,6 +363,20 @@ instance):
   checked.
 - **nono enforcement was tested on macOS (Seatbelt) only.** The agent ran on the
   laptop; Linux Landlock confinement of the agent was not part of these runs.
+- **Node-side enforcement is tested locally, not yet on AWS.** Permits and the
+  launch ledger have unit and integration tests over the real HTTP path, but the
+  recorded AWS results predate them and the deploy changes have not been run on
+  a live instance. `make demo2-bootstrap` must run before any workload
+  experiment, because it writes the controller's record of the enrollment to
+  `build/aws-keylime/enrollment.json`. The Azure scripts ship the
+  new modules but do not configure a permit key, so that server refuses to start.
+- **A permit is the controller's word.** The node verifies the controller's
+  signature, not the approvers' signatures. Sending the receipt to the node so
+  it can verify the quorum itself is a stronger follow-up.
+- **The workload shares the MCP service's user.** It could alter the launch
+  ledger. The proposal calls for a separate identity; this is not done yet.
+- **A node-side refusal still burns the approval**, including a refused permit,
+  because the receipt was already reserved (`effect_indeterminate`).
 - **Small scale.** Each scenario ran once. The 20-trial and 50-run measurements
   in the proposal are not done yet.
 

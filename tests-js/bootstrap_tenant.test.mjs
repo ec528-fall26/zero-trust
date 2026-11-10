@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 import { createDemoController } from '../src/demo/demo_controller.mjs';
 import { createBootstrapTenant } from '../src/keylime_mcp/bootstrap_tenant.mjs';
+import { PRE_ENROLLMENT_EPOCH } from '../src/keylime_mcp/permit.mjs';
+import { createPermitFixture } from '../experiments/permit_fixture.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -86,8 +88,20 @@ test('node bootstrap helper client refuses a result bound to other material', as
       server.once('error', reject);
       server.listen(socketPath, resolve);
     });
-    const bootstrap = createBootstrapTenant({ socketPath, timeoutMilliseconds: 2_000 });
-    await assert.rejects(bootstrap(approved), /not bound/);
+    const permits = createPermitFixture({
+      target: approved.target,
+      agentId: approved.agent_uuid,
+      enrollmentEpoch: PRE_ENROLLMENT_EPOCH,
+    });
+    const bootstrap = createBootstrapTenant({
+      socketPath,
+      permitVerifier: permits.verifier,
+      timeoutMilliseconds: 2_000,
+    });
+    await assert.rejects(
+      bootstrap(approved, permits.sign(approved, 'receipt-1', 'bootstrap_keylime_tenant')),
+      /not bound/,
+    );
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await rm(root, { recursive: true, force: true });

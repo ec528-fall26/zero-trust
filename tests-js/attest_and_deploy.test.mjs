@@ -11,9 +11,22 @@ import {
   readStatusSocket,
   runCommand,
 } from '../src/keylime_mcp/attest_and_deploy.mjs';
+import { LaunchLedger } from '../src/keylime_mcp/launch_ledger.mjs';
+import { createPermitFixture } from '../experiments/permit_fixture.mjs';
 
 function digest(value) {
   return `sha256:${crypto.createHash('sha256').update(value).digest('hex')}`;
+}
+
+function enforcement(root, target, agentId) {
+  const permits = createPermitFixture({ target, agentId });
+  return {
+    permits,
+    options: {
+      permitVerifier: permits.verifier,
+      launchLedger: new LaunchLedger(path.join(root, 'launch-ledger')),
+    },
+  };
 }
 
 test('Keylime handler requires fresh PASS status and protected approved material', async () => {
@@ -30,12 +43,14 @@ test('Keylime handler requires fresh PASS status and protected approved material
     await chmod(root, 0o700);
     const now = Date.now();
     const calls = [];
+    const { permits, options: enforced } = enforcement(root, 'azure-vm-demo-01', 'agent-test');
     const runner = async (command, args, options) => {
       calls.push({ command, args, options });
       if (command === '/fixed/status') {
         return {
           stdout: JSON.stringify({
             agent_id: 'agent-test',
+            enrollment_epoch: permits.enrollmentEpoch,
             results: {
               attestation_status: 'PASS',
               last_successful_attestation: Math.floor(now / 1_000),
@@ -56,6 +71,7 @@ test('Keylime handler requires fresh PASS status and protected approved material
       requiredOwnerUid: process.getuid(),
       now: () => now,
       commandRunner: runner,
+      ...enforced,
     });
     const action = {
       action_type: 'workload.execute',
@@ -66,7 +82,7 @@ test('Keylime handler requires fresh PASS status and protected approved material
       occurrence_id: crypto.randomUUID(),
       policy_version: 'demo-2.1',
     };
-    const result = await handler(action);
+    const result = await handler(action, permits.sign(action));
     assert.equal(result.attestation.verdict, 'trusted');
     assert.equal(result.attestation.occurrence_id, action.occurrence_id);
     // The node reports the age and clock reading it measured itself.
@@ -95,7 +111,9 @@ test('Keylime handler rejects status for another agent before execution', async 
     ]);
     const now = Date.now();
     let executions = 0;
+    const { permits, options: enforced } = enforcement(root, 'azure-vm-demo-01', 'agent-expected');
     const handler = createAttestAndDeploy({
+      ...enforced,
       statusCommand: '/fixed/status',
       artifactPath,
       inputPath,
@@ -118,7 +136,7 @@ test('Keylime handler rejects status for another agent before execution', async 
         };
       },
     });
-    await assert.rejects(handler({
+    const action = {
       action_type: 'workload.execute',
       operation: 'checksum.sha256',
       target: 'azure-vm-demo-01',
@@ -126,7 +144,8 @@ test('Keylime handler rejects status for another agent before execution', async 
       input_sha256: digest(input),
       occurrence_id: crypto.randomUUID(),
       policy_version: 'demo-2.1',
-    }), /another agent/);
+    };
+    await assert.rejects(handler(action, permits.sign(action)), /another agent/);
     assert.equal(executions, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -142,6 +161,7 @@ test('Keylime handler rejects ambiguous status output', async () => {
       writeFile(artifactPath, '#!/bin/sh\nexit 0\n', { mode: 0o700 }),
       writeFile(inputPath, 'payload\n', { mode: 0o600 }),
     ]);
+    const { permits, options: enforced } = enforcement(root, 'azure-vm-demo-01', 'agent-test');
     const handler = createAttestAndDeploy({
       statusCommand: '/fixed/status',
       artifactPath,
@@ -151,8 +171,9 @@ test('Keylime handler rejects ambiguous status output', async () => {
       policyVersion: 'demo-2.1',
       requiredOwnerUid: process.getuid(),
       commandRunner: async () => ({ stdout: '{}\n{}', stderr: '' }),
+      ...enforced,
     });
-    await assert.rejects(handler({
+    const action = {
       action_type: 'workload.execute',
       operation: 'checksum.sha256',
       target: 'azure-vm-demo-01',
@@ -160,7 +181,8 @@ test('Keylime handler rejects ambiguous status output', async () => {
       input_sha256: digest('payload\n'),
       occurrence_id: crypto.randomUUID(),
       policy_version: 'demo-2.1',
-    }), /ambiguous JSON/);
+    };
+    await assert.rejects(handler(action, permits.sign(action)), /ambiguous JSON/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -235,14 +257,27 @@ test('exactly one Keylime status source must be configured', () => {
   );
 });
 
+test('the node handler cannot be built without permit checks and a ledger', () => {
+  const base = {
+    statusCommand: '/c', artifactPath: '/a', inputPath: '/b', target: 't', agentId: 'x', policyVersion: 'p',
+  };
+  const permitVerifier = { verify() {} };
+  const launchLedger = { reserve() {}, record() {} };
+  assert.throws(() => createAttestAndDeploy(base), /permit verifier and a launch ledger/);
+  assert.throws(() => createAttestAndDeploy({ ...base, permitVerifier }), /launch ledger/);
+  assert.throws(() => createAttestAndDeploy({ ...base, launchLedger }), /permit verifier/);
+});
+
 test('on Linux the real runner executes the verified workload by descriptor', {
   skip: process.platform !== 'linux',
 }, async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ec528-linux-exec-'));
   const socketPath = path.join(root, 's.sock');
   const now = Date.now();
+  const { permits, options: enforced } = enforcement(root, 'aws-keylime-demo-01', 'agent-linux');
   const server = await statusServer(socketPath, JSON.stringify({
     agent_id: 'agent-linux',
+    enrollment_epoch: permits.enrollmentEpoch,
     results: {
       attestation_status: 'PASS',
       last_successful_attestation: Math.floor(now / 1_000),
@@ -265,8 +300,9 @@ test('on Linux the real runner executes the verified workload by descriptor', {
       policyVersion: 'demo-2.1',
       requiredOwnerUid: process.getuid(),
       now: () => now,
+      ...enforced,
     });
-    const result = await handler({
+    const action = {
       action_type: 'workload.execute',
       operation: 'checksum.sha256',
       target: 'aws-keylime-demo-01',
@@ -274,7 +310,8 @@ test('on Linux the real runner executes the verified workload by descriptor', {
       input_sha256: digest(input),
       occurrence_id: crypto.randomUUID(),
       policy_version: 'demo-2.1',
-    });
+    };
+    const result = await handler(action, permits.sign(action));
     assert.equal(result.workload.executed, true);
     assert.ok(result.workload.stdout.startsWith(digest(input).slice(7)));
   } finally {

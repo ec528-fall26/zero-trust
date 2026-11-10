@@ -139,6 +139,7 @@ export function createKeylimeMcpHandler(options) {
     allowInsecureLoopback = false,
     clientFactory,
     resultValidator = validateKeylimeResult,
+    permitSigner,
   } = options || {};
   const configuredAt = Date.now();
   validateTimingOptions({
@@ -158,7 +159,11 @@ export function createKeylimeMcpHandler(options) {
     throw new TypeError('invalid Keylime MCP timeout');
   }
 
-  return async function keylimeMcpHandler(action) {
+  if (typeof permitSigner?.sign !== 'function') {
+    throw new TypeError('a permit signer is required');
+  }
+
+  return async function keylimeMcpHandler(action, extra = {}) {
     let client;
     try {
       if (typeof clientFactory === 'function') {
@@ -176,9 +181,15 @@ export function createKeylimeMcpHandler(options) {
         );
         await client.connect(transport, { timeout: timeoutMilliseconds });
       }
+      // Signed after connecting so setup time does not use up the short lifetime.
+      const permit = permitSigner.sign({
+        tool: toolName,
+        action,
+        receiptId: extra?.receiptId,
+      });
       const requestedAt = Date.now();
       const result = await client.callTool(
-        { name: toolName, arguments: action },
+        { name: toolName, arguments: { ...action, permit } },
         { timeout: timeoutMilliseconds, maxTotalTimeout: timeoutMilliseconds },
       );
       const receivedAt = Date.now();

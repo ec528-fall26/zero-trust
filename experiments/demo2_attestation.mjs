@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
+import { permitSignerFromEnvironment } from '../src/controller/permit_signer.mjs';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -77,7 +78,12 @@ async function main() {
   }
   const action = JSON.parse(await readFile(actionPath, 'utf8'));
   const scenarios = [];
+  // This experiment tests the attestation layer on its own, so it signs permits
+  // with the controller's key without going through a receipt.
+  const permitSigner = await permitSignerFromEnvironment(repositoryRoot);
+  const permitContext = { receiptId: `demo2-attestation:${action.occurrence_id}` };
   const handler = createKeylimeMcpHandler({
+    permitSigner,
     endpoint,
     token,
     allowInsecureLoopback: true,
@@ -85,7 +91,7 @@ async function main() {
   });
 
   if (mode === 'expect-deny') {
-    await handler(action).then(
+    await handler(action, permitContext).then(
       () => { throw new Error('Keylime unexpectedly allowed the workload'); },
       () => scenarios.push({
         name: 'failed_attestation_blocks_workload',
@@ -94,7 +100,7 @@ async function main() {
       }),
     );
   } else {
-    const accepted = await handler(action);
+    const accepted = await handler(action, permitContext);
     scenarios.push({
       name: 'fresh_attestation_allows_exact_workload',
       passed: accepted.workload.executed === true,
@@ -103,7 +109,7 @@ async function main() {
       workload: accepted.workload,
     });
 
-    await handler({ ...action, target: `${action.target}-other` }).then(
+    await handler({ ...action, target: `${action.target}-other` }, permitContext).then(
       () => { throw new Error('Keylime unexpectedly allowed another target'); },
       () => scenarios.push({
         name: 'mcp_target_binding',
@@ -113,12 +119,13 @@ async function main() {
     );
 
     const unavailable = createKeylimeMcpHandler({
+      permitSigner,
       endpoint: 'http://127.0.0.1:9/mcp',
       token,
       allowInsecureLoopback: true,
       timeoutMilliseconds: 2_000,
     });
-    await unavailable(action).then(
+    await unavailable(action, permitContext).then(
       () => { throw new Error('unreachable Keylime unexpectedly allowed the workload'); },
       () => scenarios.push({
         name: 'keylime_unavailable_fails_closed',

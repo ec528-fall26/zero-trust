@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createDemoController } from './demo_controller.mjs';
 import { createKeylimeMcpHandler } from '../controller/keylime_mcp_client.mjs';
+import { permitSignerFromEnvironment } from '../controller/permit_signer.mjs';
 
 const MAX_BODY_BYTES = 4096;
 // Recorded Jaeger exports the page may show. Fixed names only: no path from
@@ -151,10 +152,11 @@ export async function startDemoServer(options) {
   return server;
 }
 
-function keylimeHandlerFromEnvironment() {
+async function keylimeHandlerFromEnvironment() {
   const endpoint = process.env.KEYLIME_MCP_URL;
   if (!endpoint) return null;
   return createKeylimeMcpHandler({
+    permitSigner: await permitSignerFromEnvironment(repository),
     endpoint,
     token: process.env.KEYLIME_MCP_TOKEN,
     toolName: process.env.KEYLIME_MCP_TOOL || 'attest_and_deploy',
@@ -186,7 +188,7 @@ async function main() {
     action,
     artifactPath: path.resolve(artifactPath),
     inputPath: path.resolve(inputPath),
-    keylimeHandler: keylimeHandlerFromEnvironment(),
+    keylimeHandler: await keylimeHandlerFromEnvironment(),
     manifest,
     stateDirectory: path.resolve(stateDirectory),
     port,

@@ -30,7 +30,9 @@ import {
   createReceiptRequiredDispatcher,
   DurableReceiptStore,
 } from '../src/controller/receipt_required_mcp.mjs';
+import { createPermitFixture } from './permit_fixture.mjs';
 import { createAttestAndDeploy } from '../src/keylime_mcp/attest_and_deploy.mjs';
+import { LaunchLedger } from '../src/keylime_mcp/launch_ledger.mjs';
 import { policyVersionFromFiles, sha256Digest } from '../src/keylime_mcp/policy_digest.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -134,12 +136,15 @@ async function main() {
       await writeFile(approvalPolicyPath, JSON.stringify(approvalPolicy));
       const policyVersion = await policyVersionFromFiles({ keylimePolicyPath, approvalPolicyPath });
       const state = { workloadRuns: 0 };
+      const permits = createPermitFixture({ target: TARGET, agentId: AGENT_ID });
       const handler = createAttestAndDeploy({
         statusCommand: '/fixed/status',
         artifactPath,
         inputPath,
         target: TARGET,
         agentId: AGENT_ID,
+        permitVerifier: permits.verifier,
+        launchLedger: new LaunchLedger(path.join(directory, 'launch-ledger')),
         policyVersion,
         requiredOwnerUid: process.getuid(),
         commandRunner: async (command) => {
@@ -147,6 +152,7 @@ async function main() {
             return {
               stdout: JSON.stringify({
                 agent_id: AGENT_ID,
+                enrollment_epoch: permits.enrollmentEpoch,
                 results: {
                   attestation_status: 'PASS',
                   last_successful_attestation: Math.floor(Date.now() / 1_000),
@@ -159,7 +165,11 @@ async function main() {
           return { stdout: `${digest(input).slice(7)}  input.txt\n`, stderr: '' };
         },
       });
-      return { handler, policyVersion, state };
+      return {
+        handler: (observed, extra) => handler(observed, permits.sign(observed, extra?.receiptId)),
+        policyVersion,
+        state,
+      };
     }
 
     // A controller whose Keylime policy is `keylimeBytes`, with the node

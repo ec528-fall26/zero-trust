@@ -13,6 +13,10 @@ check:
 	node --check src/keylime_mcp/attest_and_deploy.mjs
 	node --check src/keylime_mcp/config.mjs
 	node --check src/keylime_mcp/policy_digest.mjs
+	node --check src/controller/permit_signer.mjs
+	node --check src/keylime_mcp/launch_ledger.mjs
+	node --check src/keylime_mcp/mcp_http.mjs
+	node --check src/keylime_mcp/permit.mjs
 	node --check src/keylime_mcp/server.mjs
 	node --check src/keylime_mcp/bootstrap_tenant.mjs
 	node --check src/security_parameters.mjs

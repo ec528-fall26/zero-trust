@@ -4,5 +4,6 @@
   "attestation_max_age_sec": 30,
   "clock_skew_tolerance_sec": 5,
   "fresh_attestation_timeout_sec": 15,
-  "revocation_list_max_age_sec": 300
+  "revocation_list_max_age_sec": 300,
+  "permit_max_lifetime_sec": 10
 }
