@@ -271,6 +271,17 @@ The 9 cases: `outbox_write_allowed`, `outbox_read_blocked`, `inbox_read_allowed`
 
 `make drift` runs Experiments 5 to 7 together.
 
+### Experiment 8: Demo 3 bound, restart-safe handoff (local, or AWS with `--aws`)
+
+| | |
+| --- | --- |
+| Supports | "A launch happens only for the exact action a 2-of-3 quorum approved, on the enrolled node it was approved for, at most once. Substituted artifacts, inputs and targets, stale attestation, forged, expired or old-epoch permits, replays, a 10-client race, a service restart and a lost response never produce an extra launch." |
+| Command | Local (Linux, no cloud): `make demo3-bridge` (writes `results/demo3-bridge.json`). AWS: deploy, `make fetch-token`, `make demo2-bootstrap`, `./infra/aws/prepare-demo.sh`, then `make demo3-bridge-aws` (writes `results/demo3-bridge-aws.json`; opens its own SSM tunnel). |
+| Expected runtime | Local: under 30 seconds. AWS: about 2 minutes after deployment. |
+| Expected output | `"status": "pass"`. Local: 13 scenarios passing. AWS: 11 passing and 2 marked `not_run` (staged-input substitution and stale attestation, which need root changes on the node or are covered by Experiment 4). Every scenario's `launches` equals `expected_launches`, and `reconciliation` lists the node's ledger entry for each occurrence used. |
+
+Launches are counted from process-start records the workload writes locally, and from the node's launch ledger on AWS. The lost-response scenario shows the at-most-once trade-off: the workload ran, the controller never learned the result, the receipt was burned as `effect_indeterminate`, and the ledger records `succeeded` for reconciliation.
+
 ## 5. Claims and limitations
 
 ### Results recorded for Demo 2

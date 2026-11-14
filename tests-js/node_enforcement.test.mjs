@@ -2,192 +2,31 @@
 // protocol, tool schema, node handler, and real process execution.  Keylime's
 // status comes from a local socket.  The workload appends a line to a file each
 // time it runs, so every assertion counts launches rather than trusting an
-// error code.
+// error code.  See experiments/local_node.mjs.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import net from 'node:net';
-import os from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-
+import { digest, LOCAL_AGENT, LOCAL_TARGET, startLocalNode } from '../experiments/local_node.mjs';
+import { createPermitFixture } from '../experiments/permit_fixture.mjs';
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
-import { createAttestAndDeploy } from '../src/keylime_mcp/attest_and_deploy.mjs';
-import { createBootstrapTenant } from '../src/keylime_mcp/bootstrap_tenant.mjs';
-import { LaunchLedger } from '../src/keylime_mcp/launch_ledger.mjs';
-import { bearerTokenDigest, createKeylimeHttpServer } from '../src/keylime_mcp/mcp_http.mjs';
 import { PRE_ENROLLMENT_EPOCH } from '../src/keylime_mcp/permit.mjs';
-import { createPermitFixture } from '../experiments/permit_fixture.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TARGET = 'aws-keylime-demo-01';
-const AGENT = 'd432fbb3-d2f1-4a97-9ef7-75bd81c00000';
-const TOKEN = 'n'.repeat(64);
+const TARGET = LOCAL_TARGET;
+const AGENT = LOCAL_AGENT;
 const linuxOnly = { skip: process.platform !== 'linux' };
 
-function digest(value) {
-  return `sha256:${crypto.createHash('sha256').update(value).digest('hex')}`;
-}
-
-function closeServer(server) {
-  return new Promise((resolve) => {
-    server.close(resolve);
-    server.closeAllConnections?.();
-  });
-}
-
-async function listenSocket(server, socketPath) {
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(socketPath, resolve);
-  });
-}
-
-async function startNode(context, overrides = {}) {
-  const handler = createAttestAndDeploy({
-    statusSocket: context.statusPath,
-    artifactPath: context.artifactPath,
-    inputPath: context.inputPath,
-    target: TARGET,
-    agentId: AGENT,
-    policyVersion: 'demo-2.1',
-    requiredOwnerUid: process.getuid(),
-    permitVerifier: context.permits.verifier,
-    launchLedger: new LaunchLedger(context.ledgerPath),
-    ...overrides,
-  });
-  const bootstrapHandler = createBootstrapTenant({
-    socketPath: context.bootstrapPath,
-    permitVerifier: context.bootstrapPermits.verifier,
-    timeoutMilliseconds: 2_000,
-  });
-  const server = createKeylimeHttpServer({
-    handler,
-    bootstrapHandler,
-    tokenDigest: bearerTokenDigest(TOKEN),
-  });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  context.server = server;
-  context.endpoint = new URL(`http://127.0.0.1:${server.address().port}/mcp`);
-}
-
 async function withNode(run) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'ec528-node-enforcement-'));
-  await chmod(root, 0o700);
-  const launchesPath = path.join(root, 'launches');
-  const artifact = Buffer.from(`#!/bin/sh\necho launched >> '${launchesPath}'\nexec sha256sum "$1"\n`);
-  const input = Buffer.from('EC528 approved workload payload\n');
-  const permits = createPermitFixture({ target: TARGET, agentId: AGENT });
-  const bootstrapPermits = createPermitFixture({
-    target: TARGET,
-    agentId: AGENT,
-    enrollmentEpoch: PRE_ENROLLMENT_EPOCH,
-  });
-  const context = {
-    root,
-    permits,
-    bootstrapPermits,
-    artifact,
-    input,
-    artifactPath: path.join(root, 'checksum.sh'),
-    inputPath: path.join(root, 'input.txt'),
-    ledgerPath: path.join(root, 'launch-ledger'),
-    statusPath: path.join(root, 'status.sock'),
-    bootstrapPath: path.join(root, 'bootstrap.sock'),
-    keylime: { status: 'PASS', ageSeconds: 0, epoch: permits.enrollmentEpoch },
-    bootstrapCalls: 0,
-  };
-  await writeFile(context.artifactPath, artifact, { mode: 0o755 });
-  await chmod(context.artifactPath, 0o755);
-  await writeFile(context.inputPath, input, { mode: 0o644 });
-
-  const statusServer = net.createServer((connection) => {
-    connection.end(JSON.stringify({
-      agent_id: AGENT,
-      enrollment_epoch: context.keylime.epoch,
-      results: {
-        attestation_status: context.keylime.status,
-        last_successful_attestation: Math.floor(Date.now() / 1_000) - context.keylime.ageSeconds,
-      },
-    }));
-  });
-  const bootstrapServer = net.createServer((connection) => {
-    connection.once('data', (data) => {
-      context.bootstrapCalls += 1;
-      const action = JSON.parse(data.toString('utf8'));
-      connection.end(JSON.stringify({
-        status: 'enrolled',
-        agent_uuid: action.agent_uuid,
-        runtime_policy_sha256: action.runtime_policy_sha256,
-        payload_sha256: action.payload_sha256,
-        occurrence_id: action.occurrence_id,
-        measured_boot: false,
-      }));
-    });
-  });
-  await listenSocket(statusServer, context.statusPath);
-  await listenSocket(bootstrapServer, context.bootstrapPath);
-  await startNode(context);
-
-  context.action = (changes = {}) => ({
-    action_type: 'workload.execute',
-    operation: 'checksum.sha256',
-    target: TARGET,
-    artifact_sha256: digest(artifact),
-    input_sha256: digest(input),
-    occurrence_id: crypto.randomUUID(),
-    policy_version: 'demo-2.1',
-    ...changes,
-  });
-  context.launches = async () => {
-    try {
-      return (await readFile(launchesPath, 'utf8')).trim().split('\n').length;
-    } catch (error) {
-      if (error.code === 'ENOENT') return 0;
-      throw error;
-    }
-  };
-  context.ledger = new LaunchLedger(context.ledgerPath);
-  // One MCP call, as an attacker holding the bearer token would make it.
-  context.call = async (toolArguments, { name = 'attest_and_deploy', token = TOKEN } = {}) => {
-    const transport = new StreamableHTTPClientTransport(context.endpoint, {
-      authProvider: { token: async () => token },
-      requestInit: { redirect: 'error' },
-      onInsufficientScope: 'throw',
-    });
-    const client = new Client(
-      { name: 'test-attacker', version: '0.1.0' },
-      { versionNegotiation: { mode: 'auto', probe: { timeoutMs: 2_000, maxRetries: 0 } } },
-    );
-    try {
-      await client.connect(transport, { timeout: 5_000 });
-      const result = await client.callTool({ name, arguments: toolArguments }, { timeout: 10_000 });
-      return result.isError === true ? 'refused' : 'accepted';
-    } catch {
-      return 'refused';
-    } finally {
-      await client.close().catch(() => {});
-    }
-  };
-  context.restart = async () => {
-    await closeServer(context.server);
-    await startNode(context);
-  };
-
+  const node = await startLocalNode();
   try {
-    await run(context);
+    await run(node);
   } finally {
-    await closeServer(context.server);
-    await closeServer(statusServer);
-    await closeServer(bootstrapServer);
-    await rm(root, { recursive: true, force: true });
+    await node.stop();
   }
 }
 
@@ -337,6 +176,7 @@ test('a repeat delivery after a service restart does not launch again', linuxOnl
     assert.equal(await node.call({ ...action, permit }), 'accepted');
     await node.restart();
     assert.equal(await node.call({ ...action, permit }), 'refused');
+    assert.equal(await node.call({ ...action, permit: node.permits.sign(action, 'two') }), 'refused');
     assert.equal(await node.launches(), 1);
   });
 });
@@ -371,8 +211,7 @@ test('changed workload bytes block a valid permit without consuming it', linuxOn
 test('a failed launch stays consumed and is recorded as failed', linuxOnly, async () => {
   await withNode(async (node) => {
     let attempts = 0;
-    await closeServer(node.server);
-    await startNode(node, {
+    await node.restart({
       commandRunner: async () => {
         attempts += 1;
         throw new Error('simulated spawn failure');
@@ -439,7 +278,7 @@ test('a real 2-of-3 receipt reaches the node as a permit and launches once', lin
       stateDirectory: path.join(node.root, 'controller'),
       keylimeHandler: createKeylimeMcpHandler({
         endpoint: node.endpoint.href,
-        token: TOKEN,
+        token: node.token,
         allowInsecureLoopback: true,
         timeoutMilliseconds: 10_000,
         permitSigner: node.permits.signer,

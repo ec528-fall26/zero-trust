@@ -93,14 +93,20 @@ export function enrollmentRecordPath(repositoryRoot, environment = process.env) 
     || path.join(repositoryRoot, 'build', 'aws-keylime', 'enrollment.json'));
 }
 
+export function permitPrivateKeyFromEnvironment(repositoryRoot, environment = process.env) {
+  return readPrivateKeyFile(permitKeyPath(repositoryRoot, environment));
+}
+
+// The controller's record of the current enrollment, written by demo2_bootstrap.
+export async function enrollmentRecordFromEnvironment(repositoryRoot, environment = process.env) {
+  return JSON.parse(await readFile(enrollmentRecordPath(repositoryRoot, environment), 'utf8'));
+}
+
 // Signer for workloads, using the epoch recorded when this node was bootstrapped.
 export async function permitSignerFromEnvironment(repositoryRoot, environment = process.env) {
-  const privateKeyPem = await readPrivateKeyFile(permitKeyPath(repositoryRoot, environment));
-  const enrollment = JSON.parse(
-    await readFile(enrollmentRecordPath(repositoryRoot, environment), 'utf8'),
-  );
+  const enrollment = await enrollmentRecordFromEnvironment(repositoryRoot, environment);
   return createPermitSigner({
-    privateKeyPem,
+    privateKeyPem: await permitPrivateKeyFromEnvironment(repositoryRoot, environment),
     agentUuid: enrollment.agent_uuid,
     enrollmentEpoch: enrollment.enrollment_epoch,
   });
