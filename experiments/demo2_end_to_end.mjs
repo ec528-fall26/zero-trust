@@ -315,7 +315,7 @@ async function runExperiment() {
         '--strict-broker-path',
         '--audit-integrity',
         '--', '/bin/sh', '-c',
-        `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 -D > ${shellQuote(requestPath)}`,
+        `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 --decode > ${shellQuote(requestPath)}`,
       ], { timeout: 30_000 })
     ));
     mark('nono_agent_request_written', 'success', { request_id: requestId });
