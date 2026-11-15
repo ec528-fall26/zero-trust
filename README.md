@@ -32,6 +32,9 @@ make ci PYTHON=.venv/bin/python
 make demo PYTHON=.venv/bin/python
 ```
 
+On Windows, run everything inside an AlmaLinux 10 VM: WSL2 cannot run the nono
+confinement experiment. See [`docs/windows-vm-setup.md`](docs/windows-vm-setup.md).
+
 The local dashboard demonstrates receipt issuance, exact-action binding, and
 replay protection without cloud credentials. The recorded results and demo
 video use the AWS/Keylime path. See the design document for cloud setup,

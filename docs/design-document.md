@@ -1,10 +1,10 @@
 # Design Document
 
-*Demo 2 version (10/21). Updated for `demo-3` and `final-demo`.*
+*Demo 3 version (11/16). Updated for `final-demo`.*
 
-This document describes what we actually built for Demo 2, how to run it, what
-it shows, and what it does not show. Section 5 lists where Demo 2 differs from
-the milestones in our design proposal.
+This document describes what we actually built for Demo 2 and Demo 3, how to
+run it, what it shows, and what it does not show. Section 5 lists where each
+demo differs from the milestones in our design proposal.
 
 ## 1. Architecture
 
@@ -79,7 +79,7 @@ flowchart LR
 | Running the approved bytes | Hash through an open fd, then execute `/proc/self/fd/3` on `/proc/self/fd/4` | Re-opening the path after hashing allows a swap between check and use. |
 | Root-only Keylime status | A root systemd socket-activated helper, readable only by the `ec528-mcp` group | `sudo` is blocked by the service's `NoNewPrivileges=true`, and we did not want to remove that hardening. |
 | Cloud | AWS EC2 (AlmaLinux 10, `t3.small`) | See Section 5 for why not MOC. Ubuntu has no Keylime package, while AlmaLinux 10 ships Keylime 7.14.1 and the Rust agent. |
-| TPM | swtpm (software TPM) | NitroTPM needs a custom UEFI AMI and IMA setup; it is planned for Demo 3. swtpm proves the Keylime protocol flow but not a hardware root of trust. |
+| TPM | swtpm (software TPM) by default; NitroTPM optional | NitroTPM needs a custom UEFI AMI and an EK check without a vendor certificate. Demo 3 adds scripts for both (Section 3). swtpm proves the Keylime protocol flow but not a hardware root of trust. |
 | SELinux | Kept enforcing; added a narrow `ec528_swtpm` policy module | Disabling SELinux would have been faster but weakens the whole host. |
 | Language | Python for the agent side and watcher; Node.js for EMILIA and MCP | The proposal said Python throughout. EMILIA's receipt gate and the MCP SDK are JavaScript, and we use them directly rather than port the crypto. |
 
@@ -96,7 +96,15 @@ flowchart LR
 ### Local machine (all non-cloud experiments)
 
 Tested on macOS 26 (Darwin 25.1), Apple Silicon. Linux-only code paths were
-also tested in a `node:22-bookworm-slim` container.
+also tested in a `node:22-bookworm-slim` container, and Experiments 0–4 in an
+AlmaLinux 10 VM on Windows 11.
+
+**Windows: use a Linux VM, not WSL2.** Our nono profile sets
+`linux.af_unix_mediation = "pathname"`, which needs seccomp user notification.
+WSL2 refuses it with `EBUSY`, so nono cannot start and every Experiment 1 case
+exits 1 (the "blocked" cases then look like passes although nothing ran). A
+Hyper-V (Windows Pro) or VirtualBox (Windows Home) VM running AlmaLinux 10 works.
+Follow [`docs/windows-vm-setup.md`](windows-vm-setup.md).
 
 | Dependency | Version used |
 | --- | --- |
@@ -185,6 +193,28 @@ the instance through Systems Manager. The token's value is therefore kept in
 the account's SSM command history; it is per instance and useless once the
 stack is torn down, but never display that command's output.
 
+### Hardware TPM (NitroTPM), optional
+
+The default node uses swtpm. To attest with the instance's NitroTPM instead:
+
+```bash
+AMI_ID=$(./infra/aws/build-nitrotpm-ami.sh)       # one time: copy of the pinned AMI registered with TPM v2.0 + UEFI
+AMI_ID=$AMI_ID ./infra/aws/deploy.sh --apply       # wait ~15 min; node must say keylime-bootstrap-pending
+./infra/aws/enable-nitrotpm.sh ec528-zero-trust-demo
+make demo2-bootstrap                               # measured-boot policy is attached automatically
+```
+
+NitroTPM support can only be set when an AMI is registered, so
+`build-nitrotpm-ami.sh` copies the AMI and re-registers its root snapshot with
+`--tpm-support v2.0 --boot-mode uefi`. NitroTPM has no vendor EK certificate, so
+`enable-nitrotpm.sh` does not simply disable EK checking: it reads this
+instance's EK from the EC2 API (`GetInstanceTpmEkPub`, using the deployer's
+credentials outside the node), checks that the local TPM holds the same EK, and
+installs a Keylime `ek_check_script` that accepts only that EK. It then runs
+`enable-hardware-tpm.sh` to move the agent to `/dev/tpmrm0`. Run the cloud
+experiments with `KEYLIME_TPM_TYPE=nitrotpm`; Experiment 4 records the TPM type
+the node reports and fails if it differs.
+
 ## 4. Running the experiments
 
 Run every command from the repository root. Each experiment writes a JSON file
@@ -200,7 +230,7 @@ SHA-256 digests, so no tokens or keys end up in Git.
 | Supports | "The checks fail closed." Covers receipt binding, replay, malformed input, FIFO and symlink handling, and stale or mismatched Keylime results. |
 | Command | `make ci PYTHON=.venv/bin/python` |
 | Expected runtime | about 2 minutes |
-| Expected output | Python `Ran 38 tests ... OK`; Node all 118 passing on Linux, with `fail 0`. The node-enforcement and fd tests need Linux and are skipped on macOS. |
+| Expected output | Python `Ran 45 tests ... OK`; Node all 123 passing on Linux, with `fail 0`. The node-enforcement and fd tests need Linux and are skipped on macOS. |
 
 ### Experiment 1: nono confinement
 
@@ -242,6 +272,17 @@ The 9 cases: `outbox_write_allowed`, `outbox_read_blocked`, `inbox_read_allowed`
 | Expected runtime | about 2 minutes. It deliberately stops the Keylime agent and waits for attestation to go stale. |
 | Expected output | `results/demo2-end-to-end.json` with `"status": "pass"`, 7 scenarios passing, and a timeline from `nono_profile_generated` to `readonly_inbox_status_observed` |
 
+**With a live model-driven agent (Demo 3):** add `--model-agent` (Experiment 11
+explains the API key). The agent's request is then chosen by a Claude model
+inside nono instead of a scripted command, and the result records the model,
+its token usage and the arguments it chose.
+
+**With real approvers (Demo 3):** add `--human-approvers`. The primary request
+then waits for two people enrolled in `config/approvers/` (Experiment 9 explains
+enrollment and signing) and writes `results/demo3-end-to-end-human.json`. The
+Keylime outage and recovery scenarios still use fixture keys, labelled as
+automation in the result.
+
 ### Experiment 5: policy digest pinning (local, no cloud)
 
 | | |
@@ -281,6 +322,79 @@ The 9 cases: `outbox_write_allowed`, `outbox_read_blocked`, `inbox_read_allowed`
 | Expected output | `"status": "pass"`. Local: 13 scenarios passing. AWS: 11 passing and 2 marked `not_run` (staged-input substitution and stale attestation, which need root changes on the node or are covered by Experiment 4). Every scenario's `launches` equals `expected_launches`, and `reconciliation` lists the node's ledger entry for each occurrence used. |
 
 Launches are counted from process-start records the workload writes locally, and from the node's launch ledger on AWS. The lost-response scenario shows the at-most-once trade-off: the workload ran, the controller never learned the result, the receipt was burned as `effect_indeterminate`, and the ledger records `succeeded` for reconciliation.
+
+### Experiment 9: two people approve from separate credentials (local)
+
+| | |
+| --- | --- |
+| Supports | "Approval requires two different enrolled people, each signing on their own machine. The controller holds only their public keys, shows a pending request after one approval, and refuses unenrolled keys, forged signatures, the same person twice, signoffs for another request, and signoffs after the window." |
+| Setup | Each approver runs `node tools/approver.mjs keygen --role <role> --name "<name>"` on their own machine and adds the printed public record as `config/approvers/<role>.json` (at least three people; see `config/approvers/README.md`). |
+| Command | `make demo3-human-approval`. It writes `build/approvals/<receipt_id>/request.json`; send it to two approvers, each runs `node tools/approver.mjs sign request.json` and returns `signoff-<role>.json`, which goes in `build/approvals/<receipt_id>/signoffs/`. `make demo3-human-approval-fixture` runs the same scenarios with in-process keys (automation). |
+| Expected runtime | Human waiting time plus under 5 seconds. Requests expire after `approval_window_sec` (900 s). |
+| Expected output | `results/demo3-human-approval.json` with `"status": "pass"`, `approver_mode: "human"`, 7 scenarios passing (`no_receipt_before_approval`, `unenrolled_key_refused`, `pending_after_one_approval`, `same_person_twice_counts_once`, `changed_action_after_approval`, `approved_action_launches_once`, `receipt_replay_refused`), and `human_wait_seconds`. Launches are counted from process-start records of the real node code. |
+
+The approver tool recomputes the action hash and the assurance-context hash
+from the fields it displays before signing, so an approver never signs a
+summary written by the agent or the controller. Approval requires typing the
+first 8 hex characters of the action hash. The signoff uses the WebAuthn
+format the EMILIA gate already verifies (`key_class: "A"`, pinned public key,
+pinned 2-of-3 policy with `distinct_humans: true`).
+
+### Experiment 10: repeated trials and latency against the Demo 2 baseline
+
+| | |
+| --- | --- |
+| Supports | "Across repeated trials, no scenario produces an unauthorized or duplicate launch", and the cost of the gate. |
+| Command | Local: `make demo3-trials` (`TRIALS=20 LATENCY_RUNS=50` by default). AWS, after the Experiment 8 prerequisites: `make demo3-trials-aws TRIALS=5 LATENCY_RUNS=20`. |
+| Expected runtime | Local: under 1 minute. AWS: several minutes per trial (the restart scenario restarts the node service over Systems Manager). |
+| Expected output | `results/demo3-trials.json` with `"status": "pass"`; locally 260/260 scenario runs (13 scenarios x 20), `unauthorized_or_duplicate_launches: 0`, launches observed equal to launches expected (140), median/p95 latency for the gated path and the baseline, `workload_scaling` for 1 KB, 1 MB, 16 MB and 64 MB inputs, and `over_limit.passed: true`. |
+
+Demo 2 ran each scenario once, and its node launched for anyone holding the MCP
+bearer token. Here the gated path is the EMILIA receipt gate, controller,
+permit and node; the baseline calls the same node directly with a valid permit,
+so the reported overhead covers the controller-side gate only. In a local run
+on 2026-11-15 the gated median was 15.2 ms (p95 21.6 ms) against a baseline
+median of 11.3 ms.
+
+**Workload size.** Demo 2's workload hashed a 32-byte file. The same paired
+measurement is repeated with pseudo-random inputs of 1 KB, 1 MB, 16 MB and
+64 MB (`--sizes`, `--size-runs`). The node hashes the input before launching
+and the workload hashes it again, so cost grows with size while the gate's
+cost does not: in the local run above, a 64 MB input took a median of 184 ms
+on both paths. The node reads at most 64 MiB of workload material into memory;
+an input 1 MiB over that limit must be refused with no launch
+(`over_limit`). Larger workloads would need the node to hash from the verified
+descriptor in a stream instead.
+
+### Experiment 11: live model-driven agent request (local)
+
+| | |
+| --- | --- |
+| Supports | "A real model, confined by nono, can only ask: it chooses a request, the watcher rebuilds it from the bytes on disk, and it launches once after two approvals. Inside the sandbox the real API key is absent, and the controller's state, the node's port, and every host except the model API (through nono's proxy) are unreachable." |
+| Setup | An Anthropic API key in `EC528_ANTHROPIC_API_KEY`, read without echoing (`read -rs EC528_ANTHROPIC_API_KEY; export EC528_ANTHROPIC_API_KEY`). nono 0.79 or newer. |
+| Command | `make demo3-model-agent` (add `--human-approvers` by running `node experiments/demo3_model_agent.mjs --human-approvers`). `make demo3-model-agent-replay` reproduces the recorded decision without the API. |
+| Expected runtime | Under 30 seconds plus approval time. One model call of at most 1,024 output tokens. |
+| Expected output | `results/demo3-model-agent.json` with `"status": "pass"`, `agent_mode: "live_model"`, 6 scenarios passing (`sandbox_confinement_with_model_route`, `model_request_published`, `watcher_bound_trusted_material`, `pending_after_one_approval`, `model_request_launches_once`, `receipt_replay_refused`), and the model's transcript in `results/demo3-model-agent-transcript.json`. |
+
+**How the API key is handled.** The sandbox profile is generated with
+`--model-credential-env EC528_ANTHROPIC_API_KEY`. That replaces `"block": true`
+with proxy-only networking: nono's credential proxy runs in the supervisor,
+outside the sandbox, reads the key from the supervisor's environment through an
+`env://` reference, and forwards only to `https://api.anthropic.com`. The agent
+receives a loopback base URL and a per-session phantom token (in
+`EC528_MODEL_PHANTOM`); the proxy swaps the phantom for the real key. The
+profile still strips every `*KEY*` variable from the agent. The agent uses only
+the Python standard library and refuses any model endpoint that is not
+loopback. The confinement probe checks from inside the sandbox that no value in
+its environment looks like an Anthropic key, that `api.anthropic.com` and other
+hosts cannot be reached directly, and that the node's port and the
+controller's state cannot be reached.
+
+The model sees only the task, target names, input file names and their
+digests; it never sees the key, approver material or tokens. Its transcript
+(request body without headers, and the response) is committed as evidence.
+Each run costs one model call; a key with a spending limit, used only for this
+project, keeps a mistake cheap.
 
 ## 5. Claims and limitations
 
@@ -337,6 +451,16 @@ instance):
 | `verifier_detects_unapproved_program` | Keylime changed to `FAIL` with `ima.validation.ima-ng.not_in_allowlist` in at most 2.2 seconds |
 | `approved_request_denied_after_tamper` | HTTP 500 fail-closed response; workload did not execute |
 
+### Results recorded for Demo 3
+
+*To be filled from the team's runs: `make demo3-summary` prints this table from
+the files in `results/`. Replace this paragraph and the table below with its
+output before submitting.*
+
+| Experiment | Result | Detail |
+| --- | --- | --- |
+| *run `make demo3-summary`* | | |
+
 ### What these results do not show
 
 - **swtpm is not a hardware root of trust.** It proves the Keylime protocol and
@@ -345,7 +469,11 @@ instance):
   registrar, agent, swtpm, and MCP all run on the one instance being attested.
   A compromised instance could lie about itself.
 - **The three EMILIA signer keys are on one laptop.** This proves the 2-of-3
-  protocol, not independent human approval.
+  protocol, not independent human approval. Demo 3 adds enrolled approvers
+  (Experiment 9): each person signs on their own machine and the controller
+  holds only public keys. Those keys are software keys in files, not hardware
+  authenticators, and the signoff uses the WebAuthn format without a browser
+  ceremony.
 - **IMA is real kernel measurement, but the TPM is emulated.** Linux IMA
   records executed files, then a userspace emulator copies PCR 10 into swtpm.
   Root on the node could forge this flow. The policy was generated from the
@@ -372,8 +500,9 @@ instance):
   controller-only path is denied and fails closed otherwise. The refreshed
   result records `controller_state_unreadable_by_sandbox` with seven paths
   checked.
-- **nono enforcement was tested on macOS (Seatbelt) only.** The agent ran on the
-  laptop; Linux Landlock confinement of the agent was not part of these runs.
+- **nono enforcement was first tested on macOS (Seatbelt).** Experiment 1 also
+  passed 9/9 under Linux Landlock in an AlmaLinux 10 VM on Windows 11
+  (2026-11-04). It cannot run under WSL2 (see Section 3).
 - **Node-side enforcement is tested locally, not yet on AWS.** Permits and the
   launch ledger have unit and integration tests over the real HTTP path, but the
   recorded AWS results predate them and the deploy changes have not been run on
@@ -388,8 +517,15 @@ instance):
   ledger. The proposal calls for a separate identity; this is not done yet.
 - **A node-side refusal still burns the approval**, including a refused permit,
   because the receipt was already reserved (`effect_indeterminate`).
-- **Small scale.** Each scenario ran once. The 20-trial and 50-run measurements
-  in the proposal are not done yet.
+- **The model agent chooses from a catalog the controller offers.** It cannot
+  name arbitrary files or targets, and the watcher recomputes every digest, so
+  a wrong or injected choice is refused rather than run. A prompt-injection
+  scenario against the agent is final-demo work. The credential proxy keeps the
+  API key out of the sandbox, not off the controller host.
+- **Small scale.** Each Demo 2 scenario ran once. Experiment 10 now repeats the
+  bridge scenarios 20 times and measures 50 paired latency runs locally; the
+  proposal's 20-trial bootstrap and attestation classes and the AWS
+  repetitions are not done yet.
 
 ### Changes from the Demo 2 milestones in the proposal
 
@@ -402,6 +538,26 @@ We are announcing these changes, as the course rules require:
 | Quorum-controlled tenant bootstrap through Keylime secure payload | **Implemented, cloud rerun pending** | CloudFormation now stages the runtime policy and protected payload but leaves the tenant unenrolled. `demo2_bootstrap` requires a receipt bound to the agent, policy digest, payload digest and occurrence before the node-local root helper invokes `keylime_tenant --include`. Missing, one-signer, changed and replayed approvals fail before enrollment. |
 | Platform: MOC, or local KVM for this milestone | **Changed** | AWS EC2 with swtpm was used because the team had AWS credits and Systems Manager access while the MOC integration was not ready. The platform substitution is disclosed here rather than treated as equivalent hardware attestation. |
 | Nono-confined agent request (planned for Demo 3) | **Started early** | Already part of the Demo 2 end-to-end run. Two real people approving from separate credentials is still Demo 3 work. |
+
+### Demo 3 milestones
+
+| Proposal milestone | Status | Evidence and changes |
+| --- | --- | --- |
+| Bound, restart-safe handoff (`demo3_bridge.sh`) | **Met** | Experiment 8: 13/13 locally and 11 run + 2 not run on AWS. Experiment 10 repeats it 20 times with 0 unauthorized or duplicate launches. |
+| Real agent and human-in-the-loop (`demo3_confinement.sh`) | **Implemented, live two-person run pending** | The agent is a Claude model inside nono (Experiment 11, and `demo2_end_to_end.mjs --model-agent` on AWS). Two people approve from separate credentials (Experiment 9, `--human-approvers`). These replace a separate `demo3_confinement.sh`. `tools/verify_evidence.py` was not built; each result file records per-stage evidence instead. |
+| Realistic workload (course milestone bar) | **Measured locally** | Experiment 10 measures 1 KB to 64 MB inputs against Demo 2's 32-byte input, and found the node's 64 MiB material limit, which fails closed. |
+| NitroTPM measured boot (planned for Demo 3) | **Implemented, hardware run pending** | `build-nitrotpm-ami.sh` and `enable-nitrotpm.sh` (Section 3) build the TPM-enabled AMI and pin the EK from the EC2 API instead of disabling EK checks. |
+
+### Final infrastructure
+
+The proposal asks for the final evaluation on MOC or an explicitly agreed
+similar platform. These decisions were agreed on 2026-11-15:
+
+| Question | Decision | What it requires for the final |
+| --- | --- | --- |
+| Platform | **AWS EC2** (`us-east-2`, AlmaLinux 10), instead of MOC | Nothing new; Demos 2 and 3 already run there. |
+| TPM | **NitroTPM**, provided it works with AWS and Keylime | A passing hardware run (Section 3, *Hardware TPM*). Until then swtpm results are labelled as such, and if NitroTPM cannot be made to work we will announce that change rather than fall back silently. |
+| Verifier placement | **Keylime verifier and registrar on a separate instance** from the attested node | A second instance and network path in `infra/aws/` so the checker is no longer the checked machine. This removes the limitation "the checker and the checked machine are the same" (Section 5). |
 
 ## 6. Drift controls
 

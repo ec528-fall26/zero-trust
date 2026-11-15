@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import {
   chmod,
+  copyFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -15,7 +16,9 @@ import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
 import { permitSignerFromEnvironment } from '../src/controller/permit_signer.mjs';
+import { loadRoster } from '../src/controller/approver_signoff.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
+import { approvalInstructions, collectTwoApprovals, publishApprovalRequest } from './signoff_exchange.mjs';
 import { assertSandboxCannotRead } from './sandbox_check.mjs';
 import {
   addEvent,
@@ -29,10 +32,23 @@ import {
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// --human-approvers: the primary request is approved by two enrolled people
+// (config/approvers/) signing on their own machines.  The Keylime outage and
+// recovery scenarios still use fixture keys, labelled as automation.
+const HUMAN_APPROVERS = process.argv.includes('--human-approvers');
+// --model-agent: the request is chosen by a Claude model running inside nono
+// (src/agent_tool/model_agent.py) instead of a scripted shell command.  The
+// real key is read from EC528_ANTHROPIC_API_KEY by nono's credential proxy,
+// outside the sandbox; the agent gets a phantom token.
+const MODEL_AGENT = process.argv.includes('--model-agent');
+const MODEL_KEY_VARIABLE = 'EC528_ANTHROPIC_API_KEY';
+const TPM_TYPE = process.env.KEYLIME_TPM_TYPE || 'swtpm';
 const LIMITATIONS = Object.freeze([
-  'swtpm is not a hardware root of trust.',
-  'The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.',
-  'The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval.',
+  ...(TPM_TYPE === 'swtpm' ? ['swtpm is not a hardware root of trust.'] : []),
+  `The Keylime verifier, registrar, agent, ${TPM_TYPE === 'swtpm' ? 'swtpm ' : ''}and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.`,
+  HUMAN_APPROVERS
+    ? 'The primary request was approved by two enrolled people with software keys on their own machines; the outage and recovery scenarios use fixture keys (automation).'
+    : 'The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval.',
 ]);
 
 function digest(value) {
@@ -204,7 +220,8 @@ function scenarioRecord(name, expected, snapshot, passed, startedAt) {
 
 async function runExperiment() {
   const outputPath = path.resolve(
-    process.argv[2] || path.join(repositoryRoot, 'results', 'demo2-end-to-end.json'),
+    process.argv.slice(2).find((argument) => !argument.startsWith('--'))
+      || path.join(repositoryRoot, 'results', HUMAN_APPROVERS ? 'demo3-end-to-end-human.json' : 'demo2-end-to-end.json'),
   );
   const python = process.env.PYTHON_BIN || 'python3';
   const nono = process.env.NONO_BIN || 'nono';
@@ -266,7 +283,7 @@ async function runExperiment() {
     ]);
     await chmod(artifactPath, 0o700);
 
-    const requestId = crypto.randomUUID();
+    let requestId = crypto.randomUUID();
     const request = {
       schema_version: 'ec528.nono.request.v1',
       request_id: requestId,
@@ -280,6 +297,7 @@ async function runExperiment() {
       path.join(repositoryRoot, 'src', 'agent_tool', 'nono_profile.py'),
       '--outbox', directories.outbox,
       '--inbox', directories.inbox,
+      ...(MODEL_AGENT ? ['--model-credential-env', MODEL_KEY_VARIABLE] : []),
     ], { env: { ...process.env, PYTHONPATH: path.join(repositoryRoot, 'src') } });
     await writeFile(profilePath, `${generatedProfile}\n`, { mode: 0o600 });
     mark('nono_profile_generated', 'success');
@@ -304,20 +322,64 @@ async function runExperiment() {
     ));
     mark('controller_state_unreadable_by_sandbox', 'success', { paths_checked: pathsChecked });
 
-    const requestPath = path.join(directories.outbox, `${requestId}.json`);
-    const encodedRequest = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
-    await withSpan('nono.agent_writes_request', { 'ec528.request_id': requestId }, () => (
-      requiredCommand(nono, [
-        'run', '--silent',
-        '--profile', profilePath,
-        '--workdir', directories.work,
-        '--allow-cwd',
-        '--strict-broker-path',
-        '--audit-integrity',
-        '--', '/bin/sh', '-c',
-        `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 --decode > ${shellQuote(requestPath)}`,
-      ], { timeout: 30_000 })
-    ));
+    let modelAgent = null;
+    if (MODEL_AGENT) {
+      if (!process.env[MODEL_KEY_VARIABLE]) throw new Error(`--model-agent needs ${MODEL_KEY_VARIABLE}`);
+      const task = {
+        instruction: 'Compute the sha256 checksum of the approved demo payload on the attested Keylime node.',
+        catalog: {
+          targets: ['aws-keylime-demo-01'],
+          inputs: [{ name: path.basename(inputPath), sha256: digest(input), description: 'approved demo payload' }],
+        },
+      };
+      await writeFile(path.join(directories.work, 'task.json'), JSON.stringify(task), { mode: 0o600 });
+      await copyFile(
+        path.join(repositoryRoot, 'src', 'agent_tool', 'model_agent.py'),
+        path.join(directories.work, 'model_agent.py'),
+      );
+      const agentOutput = await withSpan('nono.model_agent_writes_request', {}, () => (
+        requiredCommand(nono, [
+          'run', '--silent',
+          '--profile', profilePath,
+          '--workdir', directories.work,
+          '--allow-cwd',
+          '--strict-broker-path',
+          '--audit-integrity',
+          '--', '/usr/bin/python3', 'model_agent.py',
+          '--task', 'task.json', '--outbox', directories.outbox, '--transcript', 'transcript.json',
+        ], {
+          timeout: 180_000,
+          cwd: directories.work,
+          env: {
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            [MODEL_KEY_VARIABLE]: process.env[MODEL_KEY_VARIABLE],
+          },
+        })
+      ));
+      requestId = JSON.parse(agentOutput).request_id;
+      const transcript = JSON.parse(await readFile(path.join(directories.work, 'transcript.json'), 'utf8'));
+      modelAgent = {
+        model: transcript.response?.model || transcript.model_requested,
+        usage: transcript.response?.usage || null,
+        tool_input: transcript.tool_input,
+      };
+    } else {
+      const requestPath = path.join(directories.outbox, `${requestId}.json`);
+      const encodedRequest = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
+      await withSpan('nono.agent_writes_request', { 'ec528.request_id': requestId }, () => (
+        requiredCommand(nono, [
+          'run', '--silent',
+          '--profile', profilePath,
+          '--workdir', directories.work,
+          '--allow-cwd',
+          '--strict-broker-path',
+          '--audit-integrity',
+          '--', '/bin/sh', '-c',
+          `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 --decode > ${shellQuote(requestPath)}`,
+        ], { timeout: 30_000 })
+      ));
+    }
     mark('nono_agent_request_written', 'success', { request_id: requestId });
 
     await withSpan('watcher.build_trusted_action', {}, () => requiredCommand(python, [
@@ -381,6 +443,9 @@ async function runExperiment() {
       keylimeHandler,
       manifest,
       stateDirectory: directories.state,
+      approverRoster: HUMAN_APPROVERS
+        ? await loadRoster(path.join(repositoryRoot, 'config', 'approvers'))
+        : null,
     });
 
     let startedAt = new Date().toISOString();
@@ -389,17 +454,31 @@ async function runExperiment() {
       'no_receipt', 'denied', snapshot, snapshot.last_response.status === 428, startedAt,
     ));
 
-    controller.approve('operator');
-    mark('emilia_first_distinct_signature', 'pending');
-    startedAt = new Date().toISOString();
-    snapshot = await scenarioSpan('one_of_three_signatures', 'pending_and_denied', () => controller.execute('missing'));
-    scenarios.push(scenarioRecord(
-      'one_of_three_signatures', 'pending_and_denied', snapshot,
-      controller.snapshot().receipt_ready === false && snapshot.last_response.status === 428,
-      startedAt,
-    ));
-
-    controller.approve('security');
+    const pendingAfterOne = async () => {
+      mark('emilia_first_distinct_signature', 'pending');
+      startedAt = new Date().toISOString();
+      snapshot = await scenarioSpan('one_of_three_signatures', 'pending_and_denied', () => controller.execute('missing'));
+      scenarios.push(scenarioRecord(
+        'one_of_three_signatures', 'pending_and_denied', snapshot,
+        controller.snapshot().receipt_ready === false && snapshot.last_response.status === 428,
+        startedAt,
+      ));
+    };
+    let humanApprovals = null;
+    if (HUMAN_APPROVERS) {
+      const request = controller.approvalRequest();
+      const exchange = await publishApprovalRequest(path.join(repositoryRoot, 'build', 'approvals'), request);
+      mark('emilia_approval_requested', 'pending', { receipt_id: request.receipt_id });
+      process.stdout.write(approvalInstructions(exchange, request.expires_at));
+      humanApprovals = await collectTwoApprovals(controller, exchange.inbox, Date.parse(request.expires_at), {
+        log: (line) => process.stdout.write(line),
+        afterFirst: pendingAfterOne,
+      });
+    } else {
+      controller.approve('operator');
+      await pendingAfterOne();
+      controller.approve('security');
+    }
     if (!controller.snapshot().receipt_ready) throw new Error('EMILIA did not issue a 2-of-3 receipt');
     mark('emilia_second_distinct_signature', 'receipt_issued');
 
@@ -516,6 +595,9 @@ async function runExperiment() {
     const remoteVersions = (await runSsm([
       "printf 'keylime='; rpm -q --qf '%{VERSION}-%{RELEASE}\\n' keylime",
       "printf 'swtpm='; rpm -q --qf '%{VERSION}-%{RELEASE}\\n' swtpm",
+      // Recorded from the node, not the environment: the marker exists only
+      // after enable-hardware-tpm.sh moved the agent to /dev/tpmrm0.
+      "printf 'tpm='; cat /var/lib/ec528/hardware-tpm-active 2>/dev/null || echo swtpm",
     ], context)).split('\n').reduce((values, line) => {
       const separator = line.indexOf('=');
       if (separator > 0) values[line.slice(0, separator)] = line.slice(separator + 1);
@@ -537,7 +619,12 @@ async function runExperiment() {
         ami_id: instance.ImageId,
         instance_type: instance.InstanceType,
       },
-      tpm_type: 'swtpm',
+      tpm_type: remoteVersions.tpm || 'unknown',
+      tpm_type_requested: TPM_TYPE,
+      approver_mode: HUMAN_APPROVERS ? 'human' : 'fixture_automation',
+      agent_mode: MODEL_AGENT ? 'live_model' : 'scripted',
+      model_agent: modelAgent,
+      human_approvals: humanApprovals,
       instance_id: instanceId,
       agent_uuid: agentUuid,
       action,
@@ -545,6 +632,10 @@ async function runExperiment() {
       timeline,
       limitations: [...LIMITATIONS],
     };
+    if (result.tpm_type !== TPM_TYPE) {
+      result.status = 'fail';
+      result.tpm_type_mismatch = `requested ${TPM_TYPE}, node reports ${result.tpm_type}`;
+    }
     await writeResult(outputPath, result);
     process.stdout.write(`${outputPath}\n`);
     if (result.status !== 'pass') process.exitCode = 1;
@@ -567,7 +658,7 @@ async function runExperiment() {
       repository_revision: repositoryRevision,
       repository_dirty: repositoryDirty,
       versions: { node: process.version },
-      tpm_type: 'swtpm',
+      tpm_type: TPM_TYPE,
       failed_after: timeline.at(-1)?.step || 'initialization',
       error: error instanceof Error ? error.message : 'unknown error',
       scenarios,

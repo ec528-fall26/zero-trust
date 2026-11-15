@@ -122,6 +122,7 @@ run_aws cloudformation deploy \
     VpcId="$vpc_id" \
     SubnetId="$subnet_id" \
     SourceRevision="$source_revision" \
+    ${AMI_ID:+AmiId="$AMI_ID"} \
   --tags Project=ec528-zero-trust
 
 instance_id=$(run_aws cloudformation describe-stacks \

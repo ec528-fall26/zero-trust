@@ -17,7 +17,7 @@ import crypto from 'node:crypto';
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import { digest, startLocalNode } from './local_node.mjs';
@@ -75,7 +75,7 @@ async function writeResult(result) {
 
 // ---- local backend ---------------------------------------------------------
 
-async function localBackend(workRoot) {
+export async function localBackend(workRoot) {
   if (process.platform !== 'linux') {
     throw new Error('local mode needs Linux for descriptor-bound execution');
   }
@@ -129,7 +129,7 @@ function awsEnvironment() {
   return environment;
 }
 
-async function awsBackend(workRoot) {
+export async function awsBackend(workRoot) {
   const profile = process.env.AWS_PROFILE || 'ec528-deployer';
   const region = process.env.AWS_REGION || 'us-east-2';
   const stack = process.env.AWS_STACK_NAME || 'ec528-zero-trust-demo';
@@ -279,7 +279,7 @@ async function awsBackend(workRoot) {
 
 // ---- scenarios -------------------------------------------------------------
 
-async function runScenarios(backend, workRoot) {
+export async function runScenarios(backend, workRoot) {
   const manifest = JSON.parse(await readFile(
     path.join(repositoryRoot, 'public', '.well-known', 'agent-actions.json'),
     'utf8',
@@ -606,7 +606,10 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  process.stderr.write(`demo3-bridge failed: ${error.message}\n`);
-  process.exitCode = 1;
-});
+// Run only when invoked directly; demo3_trials.mjs imports the backends.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    process.stderr.write(`demo3-bridge failed: ${error.message}\n`);
+    process.exitCode = 1;
+  });
+}

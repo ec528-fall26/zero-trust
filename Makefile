@@ -1,4 +1,4 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift demo3-bridge demo3-bridge-aws ima-tamper jaeger trace-replay demo-record fetch-token ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift demo3-bridge demo3-bridge-aws demo3-human-approval demo3-human-approval-fixture demo3-trials demo3-trials-aws demo3-local demo3-model-agent demo3-model-agent-replay demo3-summary ima-tamper jaeger trace-replay demo-record fetch-token ci
 
 # Prefer the project virtualenv (it has jsonschema) and fall back to python3.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
@@ -14,6 +14,12 @@ check:
 	node --check src/keylime_mcp/config.mjs
 	node --check src/keylime_mcp/policy_digest.mjs
 	node --check src/controller/permit_signer.mjs
+	node --check src/controller/approver_signoff.mjs
+	node --check tools/approver.mjs
+	node --check experiments/demo3_human_approval.mjs
+	node --check experiments/demo3_trials.mjs
+	node --check experiments/demo3_model_agent.mjs
+	node --check experiments/demo3_summary.mjs
 	node --check src/keylime_mcp/launch_ledger.mjs
 	node --check src/keylime_mcp/mcp_http.mjs
 	node --check src/keylime_mcp/permit.mjs
@@ -72,6 +78,41 @@ demo3-bridge:
 demo3-bridge-aws:
 	./experiments/demo3_bridge.sh --aws results/demo3-bridge-aws.json
 
+# Demo 3 human-in-the-loop: two enrolled people (config/approvers/) sign the
+# pending action on their own machines with tools/approver.mjs.  Waits up to
+# the approval window for their signoff files in build/approvals/<id>/signoffs/.
+demo3-human-approval:
+	node experiments/demo3_human_approval.mjs
+
+# Same scenarios with fixture keys generated in-process (automation, labelled).
+demo3-human-approval-fixture:
+	node experiments/demo3_human_approval.mjs --fixture
+
+# Demo 3 measurement: every bridge scenario 20 times, plus 50 paired latency
+# runs (gated path vs direct permitted node call).  Local: real node code with
+# a Keylime stand-in.  AWS: same as demo3-bridge-aws prerequisites.
+TRIALS ?= 20
+LATENCY_RUNS ?= 50
+demo3-trials:
+	node experiments/demo3_trials.mjs --trials $(TRIALS) --latency-runs $(LATENCY_RUNS)
+
+demo3-trials-aws:
+	node experiments/demo3_trials.mjs --aws --trials $(TRIALS) --latency-runs $(LATENCY_RUNS)
+
+# Demo 3 live model-driven request: a Claude model inside nono chooses the
+# request; nono's credential proxy holds the key (EC528_ANTHROPIC_API_KEY) and
+# the agent gets a phantom token.  Writes results/demo3-model-agent*.json.
+demo3-model-agent:
+	node experiments/demo3_model_agent.mjs --nono "$(NONO_BINARY)"
+
+# Reproduce the recorded model decision without calling the API.
+demo3-model-agent-replay:
+	node experiments/demo3_model_agent.mjs --nono "$(NONO_BINARY)" --replay results/demo3-model-agent-transcript.json
+
+# Markdown table of every Demo 3 result in results/, for the design document.
+demo3-summary:
+	@node experiments/demo3_summary.mjs
+
 # Needs the AWS stack and leaves its node in the failed state; tear down after.
 ima-tamper:
 	node experiments/ima_tamper.mjs
@@ -96,3 +137,9 @@ trace-replay:
 	OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 node experiments/trace_replay.mjs
 
 ci: check test
+
+# Every local (no-cloud) experiment in order, stopping at the first failure.
+# Results land in results/; nono must be on PATH (or pass NONO_BINARY=...).
+NONO_BINARY ?= $(shell command -v nono)
+demo3-local: ci integration-nono demo2-authorization drift-policy drift-time drift-revocation demo3-bridge demo3-human-approval-fixture demo3-trials
+	@echo "all local experiments passed; results are in results/"

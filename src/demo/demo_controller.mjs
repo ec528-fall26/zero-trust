@@ -10,6 +10,12 @@ import {
   DurableReceiptStore,
 } from '../controller/receipt_required_mcp.mjs';
 import { approvalPolicyBundle } from '../keylime_mcp/policy_digest.mjs';
+import {
+  createApprovalRequest,
+  createSignoff,
+  validateRoster,
+  verifySignoff,
+} from '../controller/approver_signoff.mjs';
 import { SECURITY_PARAMETERS } from '../security_parameters.mjs';
 
 const APPROVER_DEFINITIONS = Object.freeze([
@@ -65,69 +71,33 @@ function createIssuer() {
   });
 }
 
-function quorumSignoff(payload, approver, rpId, origin) {
-  const context = {
-    '@version': 'EP-ASSURANCE-CONTEXT-v1',
-    receipt_id: payload.receipt_id,
-    claim_hash: `sha256:${sha256(canonicalizeStrictJson(payload.claim)).toString('hex')}`,
-  };
-  const contextHash = `sha256:${sha256(canonicalizeStrictJson(context)).toString('hex')}`;
-  const challenge = Buffer.from(contextHash.slice('sha256:'.length), 'hex');
-  const clientData = Buffer.from(JSON.stringify({
-    type: 'webauthn.get',
-    challenge: challenge.toString('base64url'),
-    origin,
-    crossOrigin: false,
-  }), 'utf8');
-  const counter = Buffer.alloc(4);
-  counter.writeUInt32BE(1);
-  const authenticatorData = Buffer.concat([
-    sha256(rpId),
-    Buffer.from([0x05]),
-    counter,
-  ]);
-  const signature = crypto.sign(
-    'sha256',
-    Buffer.concat([authenticatorData, sha256(clientData)]),
-    approver.privateKey,
-  );
-  return Object.freeze({
-    contextHash,
-    signoff: {
-      approver_key_id: approver.keyId,
-      key_class: 'A',
-      webauthn: {
-        authenticator_data: authenticatorData.toString('base64url'),
-        client_data_json: clientData.toString('base64url'),
-        signature: signature.toString('base64url'),
-      },
+function buildClaim(action, signerIds) {
+  return {
+    action_type: action.action_type,
+    outcome: 'allow_with_signoff',
+    canonical_action: action,
+    action_hash: approvalActionHash(action),
+    quorum: {
+      threshold: 2,
+      signers: signerIds,
     },
-  });
+  };
 }
 
-function issueReceipt({ action, issuer, approvers, rpId, origin, createdAt }) {
+// The issuer signs the whole payload once a quorum of signoffs exists.  The
+// approvers signed only the receipt_id and claim (EP-ASSURANCE-CONTEXT-v1), so
+// created_at is set at issuance and the receipt lifetime starts then.
+function assembleReceipt({ request, signoffs, issuer, createdAt }) {
   const payload = {
-    receipt_id: `demo-${crypto.randomUUID()}`,
-    subject: 'agent:ec528-demo',
+    receipt_id: request.receipt_id,
+    subject: request.subject,
     created_at: createdAt,
-    claim: {
-      action_type: action.action_type,
-      outcome: 'allow_with_signoff',
-      canonical_action: action,
-      action_hash: approvalActionHash(action),
-      quorum: {
-        threshold: 2,
-        signers: approvers.map((approver) => approver.id),
-      },
+    claim: structuredClone(request.claim),
+    assurance_proof: {
+      '@version': 'EP-ASSURANCE-PROOF-v1',
+      context_hash: request.context_hash,
+      signoffs,
     },
-  };
-  const signed = approvers.map((approver) => (
-    quorumSignoff(payload, approver, rpId, origin)
-  ));
-  payload.assurance_proof = {
-    '@version': 'EP-ASSURANCE-PROOF-v1',
-    context_hash: signed[0].contextHash,
-    signoffs: signed.map((entry) => entry.signoff),
   };
   const signature = crypto.sign(
     null,
@@ -139,6 +109,21 @@ function issueReceipt({ action, issuer, approvers, rpId, origin, createdAt }) {
     payload,
     signature: { algorithm: 'Ed25519', value: signature },
   });
+}
+
+function issueFixtureReceipt({ action, issuer, approvers, rpId, origin, createdAt }) {
+  const request = createApprovalRequest({
+    receiptId: `demo-${crypto.randomUUID()}`,
+    subject: 'agent:ec528-demo',
+    claim: buildClaim(action, approvers.map((approver) => approver.id)),
+    rpId,
+    origin,
+    expiresAt: null,
+  });
+  const signoffs = approvers.map((approver) => (
+    createSignoff(request, { privateKey: approver.privateKey, keyId: approver.keyId }).signoff
+  ));
+  return assembleReceipt({ request, signoffs, issuer, createdAt });
 }
 
 function publicResponse(response) {
@@ -171,12 +156,27 @@ export async function createDemoController(options) {
     bindPolicyVersion = false,
     revocation = null,
     toolName = 'execute_approved_workload',
+    // Real people: records from config/approvers/ (public keys only).  Without
+    // a roster the controller generates labelled fixture keys for automation.
+    approverRoster = null,
   } = options;
   let action = initialAction;
   const issuer = createIssuer();
-  const approvers = APPROVER_DEFINITIONS.map(createApprover);
+  const roster = approverRoster === null ? null : validateRoster(approverRoster);
+  const approvers = roster === null
+    ? APPROVER_DEFINITIONS.map(createApprover)
+    : roster.map((record) => Object.freeze({
+      role: record.role,
+      id: record.approver_id,
+      keyId: record.key_id,
+      publicKey: record.public_key,
+      record,
+    }));
   const approverByRole = new Map(approvers.map((approver) => [approver.role, approver]));
+  const approverByKeyId = new Map(approvers.map((approver) => [approver.keyId, approver]));
   const approvals = new Set();
+  const humanSignoffs = new Map();
+  let approvalRequestRecord = null;
   const events = [];
   const rpId = '127.0.0.1';
   const origin = 'http://127.0.0.1';
@@ -300,8 +300,11 @@ export async function createDemoController(options) {
       && now() >= approvalExpiresAt;
     return {
       mode: 'local-integration-demo',
+      approver_mode: roster ? 'human' : 'fixture',
       limitations: [
-        'Approver keys are ephemeral local demo keys, not enrolled human credentials.',
+        roster
+          ? 'Approvers sign on their own machines with their own P-256 keys; the controller holds only their public keys. The keys are software keys in files, not hardware authenticators.'
+          : 'Approver keys are ephemeral local demo keys (automation), not enrolled human credentials.',
         ...(keylimeHandler ? [] : [
           'Keylime attestation is a digest-checking local stand-in until the team endpoint is available.',
         ]),
@@ -322,7 +325,63 @@ export async function createDemoController(options) {
     };
   }
 
+  function approvalWindowExpired() {
+    return approvalExpiresAt !== null && receipt === null && now() >= approvalExpiresAt;
+  }
+
+  // Human mode: the exact claim the receipt will carry, frozen on first use.
+  // Every approver signs this same request; the window starts here.
+  function approvalRequest() {
+    if (roster === null) throw new Error('approval requests are only used with an approver roster');
+    if (approvalRequestRecord === null) {
+      approvalExpiresAt = now() + approvalWindowMs;
+      approvalRequestRecord = createApprovalRequest({
+        receiptId: `ep-${crypto.randomUUID()}`,
+        subject: 'agent:ec528-demo',
+        claim: buildClaim(action, approvers.map((approver) => approver.id)),
+        rpId,
+        origin,
+        expiresAt: new Date(approvalExpiresAt).toISOString(),
+      });
+      events.push({ stage: 'emilia', outcome: 'approval-requested', at: new Date(now()).toISOString() });
+    }
+    return approvalRequestRecord;
+  }
+
+  function rejectSignoff(reason, details = {}) {
+    events.push({ stage: 'emilia', outcome: 'signoff-rejected', reason, ...details, at: new Date(now()).toISOString() });
+    return { accepted: false, reason, snapshot: snapshot() };
+  }
+
+  function submitSignoff(envelope) {
+    if (roster === null) throw new Error('signoffs are only accepted with an approver roster');
+    if (approvalRequestRecord === null) return rejectSignoff('no_pending_request');
+    if (receipt !== null) return rejectSignoff('quorum_already_reached');
+    if (approvalWindowExpired()) return rejectSignoff('approval_window_expired');
+    const approver = approverByKeyId.get(envelope?.signoff?.approver_key_id);
+    if (!approver) return rejectSignoff('approver_not_enrolled');
+    const failure = verifySignoff(envelope, approvalRequestRecord, approver.record);
+    if (failure) return rejectSignoff(failure, { role: approver.role });
+    if (humanSignoffs.has(approver.id)) return rejectSignoff('duplicate_approver', { role: approver.role });
+    humanSignoffs.set(approver.id, envelope.signoff);
+    approvals.add(approver.role);
+    events.push({ stage: 'emilia', outcome: 'approved', role: approver.role, at: new Date(now()).toISOString() });
+    if (humanSignoffs.size >= 2) {
+      receipt = assembleReceipt({
+        request: approvalRequestRecord,
+        signoffs: [...humanSignoffs.values()].slice(0, 2),
+        issuer,
+        createdAt: receiptCreatedAt || new Date(now()).toISOString(),
+      });
+      events.push({ stage: 'emilia', outcome: 'receipt-issued', at: new Date(now()).toISOString() });
+    }
+    return { accepted: true, reason: null, snapshot: snapshot() };
+  }
+
   function approve(role) {
+    if (roster !== null) {
+      throw new Error('human approvers sign on their own machines with tools/approver.mjs');
+    }
     if (approvalExpiresAt !== null && receipt === null && now() >= approvalExpiresAt) {
       events.push({ stage: 'emilia', outcome: 'expired', at: new Date(now()).toISOString() });
       throw new Error('approval window expired');
@@ -334,7 +393,7 @@ export async function createDemoController(options) {
     events.push({ stage: 'emilia', outcome: 'approved', role, at: new Date(now()).toISOString() });
     if (approvals.size >= 2 && receipt === null) {
       const selected = [...approvals].slice(0, 2).map((name) => approverByRole.get(name));
-      receipt = issueReceipt({
+      receipt = issueFixtureReceipt({
         action,
         issuer,
         approvers: selected,
@@ -377,5 +436,13 @@ export async function createDemoController(options) {
     return receipt === null ? null : structuredClone(receipt);
   }
 
-  return Object.freeze({ approve, evidence, execute, policy, snapshot });
+  return Object.freeze({
+    approvalRequest,
+    approve,
+    evidence,
+    execute,
+    policy,
+    snapshot,
+    submitSignoff,
+  });
 }
