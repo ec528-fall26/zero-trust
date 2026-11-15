@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "experiment": "demo3-bridge",
+  "mode": "aws",
+  "status": "pass",
+  "generated_at": "2026-11-15T01:17:21.352Z",
+  "repository_revision": "00e02903f90bf46d20b9dd96e1c86c15284c0569",
+  "repository_dirty": true,
+  "versions": {
+    "node": "v22.22.1"
+  },
+  "launch_evidence": "node_launch_ledger",
+  "instance_id": "i-0da35e5f823ce2634",
+  "stack": "ec528-zero-trust-demo",
+  "enrollment_epoch": "1bbde40a-a90c-41cc-ad2c-e714f5e1a856",
+  "summary": {
+    "scenarios_passed": 11,
+    "scenarios_run": 11,
+    "scenarios_not_run": 2
+  },
+  "scenarios": [
+    {
+      "name": "quorum_approved_launch",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "without_receipt": 428,
+        "after_one_approval": "pending",
+        "after_two_approvals": 200,
+        "receipt_replay": 428
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "00e25516-73f2-4f22-b41c-9cb8f6792bfb"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:52.714Z",
+      "completed_at": "2026-11-15T01:16:54.207Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "bearer_token_without_permit",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "52938e51-0cd1-4d67-8916-98f2a1077020"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:54.207Z",
+      "completed_at": "2026-11-15T01:16:54.323Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "forged_permit",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "c38ac787-257f-4875-9f61-25d5040ec0bc"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:54.323Z",
+      "completed_at": "2026-11-15T01:16:54.442Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "expired_permit",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "cf5bef38-c367-4023-be37-8e36919ad03d"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:54.442Z",
+      "completed_at": "2026-11-15T01:16:54.564Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "old_enrollment_epoch",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "0538e04a-47d9-4f79-8fb1-980fd3220e78"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:54.565Z",
+      "completed_at": "2026-11-15T01:16:55.900Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "target_substitution",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "1d7118a2-a640-4a80-8b22-64b3d76fcbd3"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:55.900Z",
+      "completed_at": "2026-11-15T01:16:56.013Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "artifact_substitution",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "8d9293d7-c7c6-4ef7-a297-8e26dacfe4ae"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:56.013Z",
+      "completed_at": "2026-11-15T01:16:57.333Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "staged_input_substituted",
+      "expected": "refused_then_executed_once",
+      "expected_launches": 1,
+      "passed": null,
+      "observed": "not_run"
+    },
+    {
+      "name": "stale_attestation",
+      "expected": "refused_then_executed_once",
+      "expected_launches": 1,
+      "passed": null,
+      "observed": "not_run"
+    },
+    {
+      "name": "permit_replay",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "first": "accepted",
+        "same_permit_again": "refused",
+        "new_permit_same_occurrence": "refused"
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "4d210dff-2198-497c-a88f-21e90aa806f4"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:16:57.333Z",
+      "completed_at": "2026-11-15T01:17:01.843Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "race_10_clients",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "deliveries": 10,
+        "accepted": 1
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "f09c7cd9-ca13-4509-be2f-c1f9875e50e3"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:17:01.843Z",
+      "completed_at": "2026-11-15T01:17:10.256Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "redelivery_after_restart",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "before_restart": "accepted",
+        "after_restart": "refused"
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "b8b09dfa-bff1-483c-b646-fef8e0c89777"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:17:10.256Z",
+      "completed_at": "2026-11-15T01:17:16.484Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "lost_response_after_launch",
+      "expected": "executed_once_and_receipt_burned",
+      "expected_launches": 1,
+      "observed": {
+        "lost_response": 500,
+        "reason": "effect_indeterminate",
+        "retry_with_same_receipt": 428
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "919f7d04-1736-4c93-ab7a-74112eb93e74"
+      ],
+      "process_launches": null,
+      "started_at": "2026-11-15T01:17:16.484Z",
+      "completed_at": "2026-11-15T01:17:17.936Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    }
+  ],
+  "reconciliation": [
+    {
+      "scenario": "quorum_approved_launch",
+      "occurrence_id": "00e25516-73f2-4f22-b41c-9cb8f6792bfb",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T01:16:55.596Z",
+      "finished_at": "2026-11-15T01:16:55.608Z",
+      "action_sha256": "sha256:c256a0f4b4fa89430a86fda911b728f95b5a180358777f82c52dc1714bc772f4",
+      "receipt_sha256": "sha256:8b565418621d68fc5276141ccdbb3f65b233c4efdab15d710e39f249fda70423"
+    },
+    {
+      "scenario": "bearer_token_without_permit",
+      "occurrence_id": "52938e51-0cd1-4d67-8916-98f2a1077020",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "forged_permit",
+      "occurrence_id": "c38ac787-257f-4875-9f61-25d5040ec0bc",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "expired_permit",
+      "occurrence_id": "cf5bef38-c367-4023-be37-8e36919ad03d",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "old_enrollment_epoch",
+      "occurrence_id": "0538e04a-47d9-4f79-8fb1-980fd3220e78",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "target_substitution",
+      "occurrence_id": "1d7118a2-a640-4a80-8b22-64b3d76fcbd3",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "artifact_substitution",
+      "occurrence_id": "8d9293d7-c7c6-4ef7-a297-8e26dacfe4ae",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "permit_replay",
+      "occurrence_id": "4d210dff-2198-497c-a88f-21e90aa806f4",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T01:17:00.125Z",
+      "finished_at": "2026-11-15T01:17:00.134Z",
+      "action_sha256": "sha256:e9b5007312a3b664034f0bf637ffd02230186e7e27ffe99d98111439d26194d4",
+      "receipt_sha256": "sha256:1623126585a29ed7e9f756979339fe046226759931a22138be37316b76c6a36c"
+    },
+    {
+      "scenario": "race_10_clients",
+      "occurrence_id": "f09c7cd9-ca13-4509-be2f-c1f9875e50e3",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T01:17:11.381Z",
+      "finished_at": "2026-11-15T01:17:11.413Z",
+      "action_sha256": "sha256:7a1ea078f92f59e7838cbcca4af7e9b842c7e1cce27efa559d40e78038e36572",
+      "receipt_sha256": "sha256:f6b367f1be07ea0fd1bc3858dd73cb8815e02d8b75ed357dc92717eacd95f1a7"
+    },
+    {
+      "scenario": "redelivery_after_restart",
+      "occurrence_id": "b8b09dfa-bff1-483c-b646-fef8e0c89777",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T01:17:13.003Z",
+      "finished_at": "2026-11-15T01:17:13.012Z",
+      "action_sha256": "sha256:b75797f36a9c5e1c68a3ded9d496b80565ef779d1c4de1bf5694bf430a54860d",
+      "receipt_sha256": "sha256:1623126585a29ed7e9f756979339fe046226759931a22138be37316b76c6a36c"
+    },
+    {
+      "scenario": "lost_response_after_launch",
+      "occurrence_id": "919f7d04-1736-4c93-ab7a-74112eb93e74",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T01:17:19.260Z",
+      "finished_at": "2026-11-15T01:17:19.273Z",
+      "action_sha256": "sha256:beae0e1836e1d3a079dd7e457b879019f3ab59ea397e65f5ff2f0e95580283d1",
+      "receipt_sha256": "sha256:2d7f297673f43177ab00265f8d100f492535715784487226383bd3bd30960032"
+    }
+  ],
+  "limitations": [
+    "Launches are counted from the node's launch ledger and accepted responses; the AWS node keeps no separate process-start record.",
+    "Staged-input substitution and stale attestation are not run against AWS: the first needs root changes to the pinned files, and the second is covered by demo2_end_to_end (keylime_agent_stopped).",
+    "The three EMILIA approver keys are ephemeral demo keys on one machine.",
+    "The node verifies the controller's permit signature, not the approvers' signatures.",
+    "The restart scenario restarts the MCP service; it does not reboot the node or roll back a snapshot.",
+    "The workload runs as the same user as the MCP service, which could alter the launch ledger."
+  ]
+}

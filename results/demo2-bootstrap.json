@@ -2,16 +2,16 @@
   "schema_version": 1,
   "experiment": "demo2-bootstrap",
   "status": "pass",
-  "generated_at": "2026-11-05T00:49:41.221Z",
-  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
-  "repository_dirty": true,
+  "generated_at": "2026-11-15T01:16:28.179Z",
+  "repository_revision": "00e02903f90bf46d20b9dd96e1c86c15284c0569",
+  "repository_dirty": false,
   "action": {
     "action_type": "tenant.bootstrap",
     "target": "aws-keylime-demo-01",
     "agent_uuid": "d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
-    "runtime_policy_sha256": "sha256:ec9577532c15e5b7be9141847017ea259196375b1b42d029872377b4cb57f5a5",
+    "runtime_policy_sha256": "sha256:0c810704a6d91139ba9c4e5360f24527b2319227494323d19dfc08fb7ce8d5f8",
     "payload_sha256": "sha256:64bd4c3ff5e9a6934913fd1b861d6569585e60ac376892101b60931ca341a698",
-    "occurrence_id": "8c5fa786-4fbb-4dfa-af5a-e4059ac61953",
+    "occurrence_id": "1bbde40a-a90c-41cc-ad2c-e714f5e1a856",
     "policy_version": "demo-2.1"
   },
   "scenarios": [
@@ -32,18 +32,20 @@
     "result": {
       "status": "enrolled",
       "agent_uuid": "d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
-      "runtime_policy_sha256": "sha256:ec9577532c15e5b7be9141847017ea259196375b1b42d029872377b4cb57f5a5",
+      "runtime_policy_sha256": "sha256:0c810704a6d91139ba9c4e5360f24527b2319227494323d19dfc08fb7ce8d5f8",
       "payload_sha256": "sha256:64bd4c3ff5e9a6934913fd1b861d6569585e60ac376892101b60931ca341a698",
-      "occurrence_id": "8c5fa786-4fbb-4dfa-af5a-e4059ac61953",
+      "occurrence_id": "1bbde40a-a90c-41cc-ad2c-e714f5e1a856",
       "measured_boot": false
     },
     "evidence": {
-      "receipt_id": "demo-55b3e90c-72f6-437b-86f9-e4b2a3d7cbdb",
+      "receipt_id": "demo-be9317c8-86e2-4b4a-b103-be46421d3818",
       "outcome": "allow_with_signoff"
     }
   },
   "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP run on the same instance in this demo. This proves the protocol flow, not independent attestation.",
     "The three demo signer keys are generated on one controller machine.",
-    "Measured boot is true only when the node has a hardware TPM and a kernel UEFI event log."
+    "This swtpm deployment has IMA runtime measurements but no measured-boot policy; measured boot requires a hardware TPM and a kernel UEFI event log."
   ]
 }
