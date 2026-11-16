@@ -68,7 +68,7 @@ if (!/^[a-f0-9]{64}$/.test(expected)) throw new Error("bad EK digest");
 const commands = [
   "set -eu",
   "test -c /dev/tpmrm0",
-  "test -s /sys/kernel/security/tpm0/binary_bios_measurements",
+  "test -n \"$(head -c 64 /sys/kernel/security/tpm0/binary_bios_measurements | od -An -tx1)\"",
   "test \"$(cat /var/lib/ec528-bootstrap-result)\" = keylime-bootstrap-pending",
   // Preflight: the TPM in this instance must hold the EK that EC2 reported.
   "tpm2_createek -T device:/dev/tpmrm0 -c /tmp/ec528-ek.ctx -G rsa -u /tmp/ec528-ek.pem -f pem >/dev/null",
@@ -82,6 +82,11 @@ const commands = [
   "chmod 0755 /usr/local/libexec/ec528-ek-check",
   "printf \"[tenant]\\nrequire_ek_cert = False\\nek_check_script = /usr/local/libexec/ec528-ek-check\\n\" > /etc/keylime/tenant.conf.d/20-nitrotpm-ek.conf",
   "bash /opt/ec528-zero-trust/infra/aws/enable-hardware-tpm.sh",
+  // The EK check is a new root-run program.  Rebuild the runtime policy now,
+  // while enrollment is still pending, exactly as the template does after
+  // installing its own helpers; otherwise IMA correctly rejects its first run.
+  "keylime-policy create runtime --rootfs / --skip-path /proc,/sys,/dev,/run,/tmp,/var/tmp,/var/log,/var/cache,/var/lib/amazon,/var/lib/keylime,/var/lib/swtpm,/var/lib/ec528,/usr/share/doc,/usr/share/man,/usr/share/locale --ima-measurement-list /sys/kernel/security/ima/ascii_runtime_measurements --excludelist /var/lib/ec528/ima-exclude.txt --output /var/lib/ec528/runtime-policy.json",
+  "chmod 0600 /var/lib/ec528/runtime-policy.json",
   "echo nitrotpm-enabled ek_sha256=$observed",
 ];
 process.stdout.write(JSON.stringify({ commands, executionTimeout: ["300"] }));

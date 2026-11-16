@@ -410,7 +410,10 @@ Resources:
               if hardware_tpm.exists() and pathlib.Path("/dev/tpmrm0").exists() and boot_log.is_file():
                   mb_policy = pathlib.Path("/var/lib/ec528/measured-boot-policy.json")
                   subprocess.run([
-                      "keylime-policy", "create", "measured-boot",
+                      # -i: EC2 UEFI boots without Secure Boot unless the AMI
+                      # carries Secure Boot variables; the policy still pins the
+                      # measured firmware, boot loader and kernel events.
+                      "keylime-policy", "create", "measured-boot", "-i",
                       "--eventlog-file", str(boot_log), "--output", str(mb_policy),
                   ], check=True, timeout=120)
                   command.extend(["--mb-policy", str(mb_policy)])

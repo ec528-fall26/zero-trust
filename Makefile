@@ -118,7 +118,7 @@ demo3-model-agent-replay:
 
 # Markdown table of every Demo 3 result in results/, for the design document.
 demo3-summary:
-	@node experiments/demo3_summary.mjs
+	@node experiments/demo3_summary.mjs --write-doc
 
 # Needs the AWS stack and leaves its node in the failed state; tear down after.
 ima-tamper:

@@ -79,7 +79,7 @@ flowchart LR
 | Running the approved bytes | Hash through an open fd, then execute `/proc/self/fd/3` on `/proc/self/fd/4` | Re-opening the path after hashing allows a swap between check and use. |
 | Root-only Keylime status | A root systemd socket-activated helper, readable only by the `ec528-mcp` group | `sudo` is blocked by the service's `NoNewPrivileges=true`, and we did not want to remove that hardening. |
 | Cloud | AWS EC2 (AlmaLinux 10, `t3.small`) | See Section 5 for why not MOC. Ubuntu has no Keylime package, while AlmaLinux 10 ships Keylime 7.14.1 and the Rust agent. |
-| TPM | swtpm (software TPM) by default; NitroTPM optional | NitroTPM needs a custom UEFI AMI and an EK check without a vendor certificate. Demo 3 adds scripts for both (Section 3). swtpm proves the Keylime protocol flow but not a hardware root of trust. |
+| TPM | swtpm (software TPM) by default; NitroTPM on the TPM-enabled AMI | NitroTPM needs a custom UEFI AMI and an EK check without a vendor certificate (Section 3). It passed bootstrap, attestation and the end-to-end run on 2026-11-16. swtpm stays the quick default and proves the protocol flow, not a hardware root of trust. |
 | SELinux | Kept enforcing; added a narrow `ec528_swtpm` policy module | Disabling SELinux would have been faster but weakens the whole host. |
 | Language | Python for the agent side and watcher; Node.js for EMILIA and MCP | The proposal said Python throughout. EMILIA's receipt gate and the MCP SDK are JavaScript, and we use them directly rather than port the crypto. |
 
@@ -193,7 +193,7 @@ the instance through Systems Manager. The token's value is therefore kept in
 the account's SSM command history; it is per instance and useless once the
 stack is torn down, but never display that command's output.
 
-### Hardware TPM (NitroTPM), optional
+### Hardware TPM (NitroTPM)
 
 The default node uses swtpm. To attest with the instance's NitroTPM instead:
 
@@ -214,6 +214,30 @@ installs a Keylime `ek_check_script` that accepts only that EK. It then runs
 `enable-hardware-tpm.sh` to move the agent to `/dev/tpmrm0`. Run the cloud
 experiments with `KEYLIME_TPM_TYPE=nitrotpm`; Experiment 4 records the TPM type
 the node reports and fails if it differs.
+
+Check the TPM is the hardware one before trusting any result: on the node,
+`sudo tpm2_getcap -T device:/dev/tpmrm0 properties-fixed | grep -A1 MANUFACTURER`
+must print `0x414D5A4E` ("AMZN"); swtpm reports IBM.
+
+Our first hardware run (2026-11-16) found four problems that swtpm had hidden.
+All are fixed in these scripts, so a fresh deploy needs no manual steps:
+
+| Problem | Fix |
+| --- | --- |
+| `test -s` on `binary_bios_measurements` always failed: kernel security files report size 0 | Both scripts read the first bytes instead |
+| The registrar refused the agent: it still held the swtpm identity for the same UUID ("re-registration with different TPM identity is forbidden") | `enable-hardware-tpm.sh` deletes the registration and moves the swtpm `agent_data.json` aside |
+| `keylime-policy create measured-boot` refused because Secure Boot is off on this AMI | The bootstrap helper passes `-i`; the policy still pins the measured firmware, boot loader and kernel events |
+| IMA rejected the new EK check program (and, in our run, a helper we had edited by hand): neither was in the runtime policy built at deploy | `enable-nitrotpm.sh` rebuilds the runtime policy after installing the EK check, while enrollment is still pending, as the template does for its own helpers |
+
+The last row is the system working as designed: a root-run file that changed
+after the node was measured made attestation fail. Save the hardware results
+under their own names so they do not overwrite the swtpm ones:
+
+```bash
+cp results/demo2-bootstrap.json results/demo3-nitrotpm-bootstrap.json
+cp results/demo2-attestation.json results/demo3-nitrotpm-attestation.json
+cp results/demo2-end-to-end.json results/demo3-nitrotpm-end-to-end.json
+```
 
 ## 4. Running the experiments
 
@@ -471,18 +495,50 @@ instance):
 
 ### Results recorded for Demo 3
 
-*To be filled from the team's runs: `make demo3-summary` prints this table from
-the files in `results/`. Replace this paragraph and the table below with its
-output before submitting.*
+Generated from the files in `results/` by `make demo3-summary` (which rewrites
+the block below). "Dirty tree" means the run used uncommitted changes, which
+were committed straight afterwards. Approvals in the NitroTPM run are fixture
+keys; the two-person approval was run on the swtpm node the same night.
 
+<!-- demo3-summary:start -->
 | Experiment | Result | Detail |
 | --- | --- | --- |
-| *run `make demo3-summary`* | | |
+| Bound handoff, local (Exp. 8) | **pass** at `ce01a63`, dirty tree | 13/13 scenarios |
+| Bound handoff, AWS (Exp. 8) | **pass** at `00e0290`, dirty tree | 11/11 scenarios |
+| Repeated trials, local (Exp. 10) | **pass** at `ce01a63`, dirty tree | 260/260 runs, 0 unauthorized or duplicate launches |
+| Repeated trials, AWS (Exp. 10) | not run |  |
+| Two people approve (Exp. 9) | **pass** at `5311bd9` | 7/7 scenarios, human, 298.627 s human wait |
+| Live model agent (Exp. 11) | **pass** at `5311bd9` | 6/6 scenarios, claude-sonnet-5-5 |
+| End to end, people + model on AWS (Exp. 4) | **pass** at `5311bd9`, dirty tree | 7/7 scenarios, tpm swtpm, agent live_model |
+| Cloud attestation (Exp. 3) | **pass** at `0aabc18`, dirty tree | 3/3 scenarios |
+| NitroTPM bootstrap (Section 3) | **pass** at `aa71229`, dirty tree | 3/3 scenarios |
+| NitroTPM attestation (Exp. 3) | **pass** at `aa71229`, dirty tree | 3/3 scenarios, verdict trusted |
+| NitroTPM end to end, model agent (Exp. 4) | **pass** at `aa71229`, dirty tree | 7/7 scenarios, tpm nitrotpm, agent live_model, approvals fixture_automation |
+
+| Measurement | Demo 2 | Demo 3 |
+| --- | --- | --- |
+| Runs per scenario | 1 | 20 |
+| Launches from a caller holding only the bearer token | possible (node checked the token only) | 0 in 20 attempts |
+| Gated launch latency, median / p95 | not measured | 34.8 / 41.2 ms |
+| Overhead of the gate over a direct permitted call, median | not measured | 11.1 ms |
+| Input 1KB: gated / baseline median | 32-byte input only | 46.8 / 28.8 ms |
+| Input 1MB: gated / baseline median | 32-byte input only | 52.7 / 37.7 ms |
+| Input 16MB: gated / baseline median | 32-byte input only | 132.8 / 111.8 ms |
+| Input 64MB: gated / baseline median | 32-byte input only | 419 / 380.6 ms |
+| Input over the 64 MiB node limit | not tested | refused, 0 launches |
+<!-- demo3-summary:end -->
 
 ### What these results do not show
 
 - **swtpm is not a hardware root of trust.** It proves the Keylime protocol and
   our fail-closed handling, not that a physical chip vouched for the machine.
+  The NitroTPM runs remove this for the runs labelled `nitrotpm`; the rest of
+  the Demo 3 results (two-person approval, AWS bridge) are still swtpm.
+- **NitroTPM trust rests on AWS.** The EK is pinned from the EC2 API, not a
+  vendor certificate, so we trust AWS's control plane and the Nitro hypervisor.
+  The AMI boots without Secure Boot (measured-boot policy uses `-i`), and the
+  runtime policy is rebuilt on the node once the EK check is installed: trust on
+  first use, as before.
 - **The checker and the checked machine are the same.** The Keylime verifier,
   registrar, agent, swtpm, and MCP all run on the one instance being attested.
   A compromised instance could lie about itself.
@@ -552,8 +608,8 @@ We are announcing these changes, as the course rules require:
 | Proposal milestone | Status | Change and reason |
 | --- | --- | --- |
 | Exact-action 2-of-3 authorization (`demo2_authorization.sh`) | **Met** | As planned, plus target-binding and restart-replay cases. |
-| Keylime enrollment with measured-boot and IMA runtime policy | **Implemented, hardware run pending** | Enrollment always attaches the generated IMA policy. On a NitroTPM/UEFI AMI, run `infra/aws/enable-hardware-tpm.sh` before bootstrap; it fails unless a hardware TPM and non-empty kernel boot event log exist, moves the agent off swtpm, and enables generation of the Keylime measured-boot reference policy. The existing swtpm evidence still proves IMA only; a NitroTPM run is required before claiming hardware-rooted measured boot. |
-| Quorum-controlled tenant bootstrap through Keylime secure payload | **Implemented, cloud rerun pending** | CloudFormation now stages the runtime policy and protected payload but leaves the tenant unenrolled. `demo2_bootstrap` requires a receipt bound to the agent, policy digest, payload digest and occurrence before the node-local root helper invokes `keylime_tenant --include`. Missing, one-signer, changed and replayed approvals fail before enrollment. |
+| Keylime enrollment with measured-boot and IMA runtime policy | **Met in Demo 3** | Enrollment always attaches the generated IMA policy. On the NitroTPM AMI (Section 3) enrollment also attaches a measured-boot policy, and on 2026-11-16 the verifier checked PCRs 0–16 against the boot log and rated the node trusted (`results/demo3-nitrotpm-*.json`). swtpm evidence proves IMA only. |
+| Quorum-controlled tenant bootstrap through Keylime secure payload | **Met** (AWS, swtpm and NitroTPM) | CloudFormation now stages the runtime policy and protected payload but leaves the tenant unenrolled. `demo2_bootstrap` requires a receipt bound to the agent, policy digest, payload digest and occurrence before the node-local root helper invokes `keylime_tenant --include`. Missing, one-signer, changed and replayed approvals fail before enrollment. |
 | Platform: MOC, or local KVM for this milestone | **Changed** | AWS EC2 with swtpm was used because the team had AWS credits and Systems Manager access while the MOC integration was not ready. The platform substitution is disclosed here rather than treated as equivalent hardware attestation. |
 | Nono-confined agent request (planned for Demo 3) | **Started early** | Already part of the Demo 2 end-to-end run. Two real people approving from separate credentials is still Demo 3 work. |
 
@@ -562,9 +618,9 @@ We are announcing these changes, as the course rules require:
 | Proposal milestone | Status | Evidence and changes |
 | --- | --- | --- |
 | Bound, restart-safe handoff (`demo3_bridge.sh`) | **Met** | Experiment 8: 13/13 locally and 11 run + 2 not run on AWS. Experiment 10 repeats it 20 times with 0 unauthorized or duplicate launches. |
-| Real agent and human-in-the-loop (`demo3_confinement.sh`) | **Implemented, live two-person run pending** | The agent is a Claude model inside nono (Experiment 11, and `demo2_end_to_end.mjs --model-agent` on AWS). Two people approve from separate credentials (Experiment 9, `--human-approvers`). These replace a separate `demo3_confinement.sh`. `tools/verify_evidence.py` was not built; each result file records per-stage evidence instead. |
+| Real agent and human-in-the-loop (`demo3_confinement.sh`) | **Met** | The agent is a Claude model inside nono (Experiment 11, and `demo2_end_to_end.mjs --model-agent` on AWS). Two people approve from separate credentials (Experiment 9, `--human-approvers`). On 2026-11-15 two teammates signed from their own laptops: locally (Experiment 9, pending after one signoff) and on AWS with the live model agent (Experiment 4 `--human-approvers`). These replace a separate `demo3_confinement.sh`. `tools/verify_evidence.py` was not built; each result file records per-stage evidence instead. |
 | Realistic workload (course milestone bar) | **Measured locally** | Experiment 10 measures 1 KB to 64 MB inputs against Demo 2's 32-byte input, and found the node's 64 MiB material limit, which fails closed. |
-| NitroTPM measured boot (planned for Demo 3) | **Implemented, hardware run pending** | `build-nitrotpm-ami.sh` and `enable-nitrotpm.sh` (Section 3) build the TPM-enabled AMI and pin the EK from the EC2 API instead of disabling EK checks. |
+| NitroTPM measured boot (planned for Demo 3) | **Met** | `build-nitrotpm-ami.sh` and `enable-nitrotpm.sh` (Section 3) build the TPM-enabled AMI and pin the EK from the EC2 API instead of disabling EK checks. Bootstrap, attestation and the end-to-end run with the live model agent passed on the hardware TPM (manufacturer AMZN). The four problems the first run found are fixed (Section 3). |
 
 ### Final infrastructure
 
@@ -574,7 +630,7 @@ similar platform. These decisions were agreed on 2026-11-15:
 | Question | Decision | What it requires for the final |
 | --- | --- | --- |
 | Platform | **AWS EC2** (`us-east-2`, AlmaLinux 10), instead of MOC | Nothing new; Demos 2 and 3 already run there. |
-| TPM | **NitroTPM**, provided it works with AWS and Keylime | A passing hardware run (Section 3, *Hardware TPM*). Until then swtpm results are labelled as such, and if NitroTPM cannot be made to work we will announce that change rather than fall back silently. |
+| TPM | **NitroTPM** | Hardware run passed on 2026-11-16 (Section 3). For the final, run the full evaluation on it, including a measured-boot mismatch. |
 | Verifier placement | **Keylime verifier and registrar on a separate instance** from the attested node | A second instance and network path in `infra/aws/` so the checker is no longer the checked machine. This removes the limitation "the checker and the checked machine are the same" (Section 5). |
 
 ## 6. Drift controls

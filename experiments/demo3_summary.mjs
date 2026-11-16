@@ -1,8 +1,9 @@
 // Prints the Demo 3 results table (Markdown) from the files in results/, for
 // the design document and slides.  Missing results are shown as "not run".
 //
-//   node experiments/demo3_summary.mjs
-import { readFile } from 'node:fs/promises';
+//   node experiments/demo3_summary.mjs               # print
+//   node experiments/demo3_summary.mjs --write-doc   # also update docs/design-document.md
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,9 +30,11 @@ function passed(result) {
   return `${ran.filter((entry) => entry.passed).length}/${ran.length} scenarios`;
 }
 
-const [bridge, bridgeAws, trials, trialsAws, human, model, e2eHuman, attestation] = await Promise.all([
+const [bridge, bridgeAws, trials, trialsAws, human, model, e2eHuman, attestation,
+  nitroBootstrap, nitroAttestation, nitroEndToEnd] = await Promise.all([
   'demo3-bridge.json', 'demo3-bridge-aws.json', 'demo3-trials.json', 'demo3-trials-aws.json',
   'demo3-human-approval.json', 'demo3-model-agent.json', 'demo3-end-to-end-human.json', 'demo2-attestation.json',
+  'demo3-nitrotpm-bootstrap.json', 'demo3-nitrotpm-attestation.json', 'demo3-nitrotpm-end-to-end.json',
 ].map(load));
 
 const rows = [
@@ -49,6 +52,11 @@ const rows = [
     ? `${passed(e2eHuman)}, tpm ${e2eHuman.tpm_type}, agent ${e2eHuman.agent_mode}` : ''],
   ['Cloud attestation (Exp. 3)', status(attestation), attestation
     ? `${passed(attestation)}${attestation.tpm_type ? `, tpm ${attestation.tpm_type}` : ''}` : ''],
+  ['NitroTPM bootstrap (Section 3)', status(nitroBootstrap), passed(nitroBootstrap)],
+  ['NitroTPM attestation (Exp. 3)', status(nitroAttestation), nitroAttestation
+    ? `${passed(nitroAttestation)}, verdict ${nitroAttestation.scenarios?.[0]?.evidence?.verdict || 'n/a'}` : ''],
+  ['NitroTPM end to end, model agent (Exp. 4)', status(nitroEndToEnd), nitroEndToEnd
+    ? `${passed(nitroEndToEnd)}, tpm ${nitroEndToEnd.tpm_type}, agent ${nitroEndToEnd.agent_mode}, approvals ${nitroEndToEnd.approver_mode}` : ''],
 ];
 
 const lines = [
@@ -69,9 +77,24 @@ if (trials?.latency) {
   for (const entry of trials.workload_scaling?.sizes || []) {
     lines.push(`| Input ${entry.input}: gated / baseline median | 32-byte input only | ${entry.gated.median_ms} / ${entry.baseline.median_ms} ms |`);
   }
+  if (trialsAws?.latency) {
+    lines.push(`| Gated launch latency on AWS, median / p95 | not measured | ${trialsAws.latency.gated.median_ms} / ${trialsAws.latency.gated.p95_ms} ms (overhead ${trialsAws.latency.overhead_median_ms} ms) |`);
+  }
   if (trials.workload_scaling?.over_limit) {
     lines.push(`| Input over the 64 MiB node limit | not tested | ${trials.workload_scaling.over_limit.outcome}, ${trials.workload_scaling.over_limit.launches} launches |`);
   }
 }
 
 process.stdout.write(`${lines.join('\n')}\n`);
+
+if (process.argv.includes('--write-doc')) {
+  const documentPath = path.join(results, '..', 'docs', 'design-document.md');
+  const document = await readFile(documentPath, 'utf8');
+  const start = '<!-- demo3-summary:start -->';
+  const end = '<!-- demo3-summary:end -->';
+  const from = document.indexOf(start);
+  const to = document.indexOf(end);
+  if (from < 0 || to < from) throw new Error('design document has no demo3-summary markers');
+  await writeFile(documentPath, `${document.slice(0, from + start.length)}\n${lines.join('\n')}\n${document.slice(to)}`);
+  process.stderr.write(`updated ${documentPath}\n`);
+}

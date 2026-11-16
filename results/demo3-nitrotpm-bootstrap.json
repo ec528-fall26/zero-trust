@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-bootstrap",
+  "status": "pass",
+  "generated_at": "2026-11-16T05:33:17.432Z",
+  "repository_revision": "aa71229286f91443ea886ca43a4b6e26c17fe7f8",
+  "repository_dirty": true,
+  "action": {
+    "action_type": "tenant.bootstrap",
+    "target": "aws-keylime-demo-01",
+    "agent_uuid": "d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
+    "runtime_policy_sha256": "sha256:edc428b2dadb1fda720f749060c56035c6027fbd09cfd7819d5d8ba001511d40",
+    "payload_sha256": "sha256:64bd4c3ff5e9a6934913fd1b861d6569585e60ac376892101b60931ca341a698",
+    "occurrence_id": "bbd1d8ea-fe5e-4dfa-819b-f15119068960",
+    "policy_version": "demo-2.1"
+  },
+  "scenarios": [
+    {
+      "name": "missing_receipt",
+      "passed": true
+    },
+    {
+      "name": "one_signer_pending",
+      "passed": true
+    },
+    {
+      "name": "quorum_controlled_enrollment",
+      "passed": true
+    }
+  ],
+  "result": {
+    "result": {
+      "status": "enrolled",
+      "agent_uuid": "d432fbb3-d2f1-4a97-9ef7-75bd81c00000",
+      "runtime_policy_sha256": "sha256:edc428b2dadb1fda720f749060c56035c6027fbd09cfd7819d5d8ba001511d40",
+      "payload_sha256": "sha256:64bd4c3ff5e9a6934913fd1b861d6569585e60ac376892101b60931ca341a698",
+      "occurrence_id": "bbd1d8ea-fe5e-4dfa-819b-f15119068960",
+      "measured_boot": true
+    },
+    "evidence": {
+      "receipt_id": "demo-5880fdbd-2584-406d-9217-5f685406147c",
+      "outcome": "allow_with_signoff"
+    }
+  },
+  "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP run on the same instance in this demo. This proves the protocol flow, not independent attestation.",
+    "The three demo signer keys are generated on one controller machine.",
+    "This swtpm deployment has IMA runtime measurements but no measured-boot policy; measured boot requires a hardware TPM and a kernel UEFI event log."
+  ]
+}
