@@ -59,7 +59,7 @@ export function requireCredential(kind) {
 function sandboxEnvironment(kind, workdir, { replay }) {
   const environment = {
     PATH: process.env.PATH,
-    HOME: workdir,
+    HOME: process.env.HOME,
     LANG: process.env.LANG || 'C.UTF-8',
   };
   if (kind === 'claude-code') {

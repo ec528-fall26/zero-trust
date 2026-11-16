@@ -166,7 +166,7 @@ class ModelAgentTests(unittest.TestCase):
         call = FakeProxy.seen[0]
         self.assertEqual(call["path"], f"/{MODEL_ROUTE}/v1/messages")
         self.assertEqual(call["headers"]["x-api-key"], "phantom-session-token")
-        self.assertEqual(call["body"]["tool_choice"], {"type": "any"})
+        self.assertEqual(call["body"]["tool_choice"], {"type": "auto"})
         transcript = json.loads(self.transcript.read_text())
         self.assertEqual(transcript["tool_input"], FakeProxy.tool_input)
 

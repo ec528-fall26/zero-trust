@@ -43,7 +43,7 @@ TARGET = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 ROUTE = "ec528_model"
 PHANTOM_VAR = "EC528_MODEL_PHANTOM"
 DEFAULT_MODEL = "claude-sonnet-5-5"
-MAX_TOKENS = 1024
+MAX_TOKENS = 4096
 ANTHROPIC_VERSION = "2023-06-01"
 
 SYSTEM_PROMPT = (
@@ -136,7 +136,7 @@ def choose_request(task: dict[str, object], model: str) -> tuple[dict[str, str],
         "max_tokens": MAX_TOKENS,
         "system": SYSTEM_PROMPT,
         "tools": [_tool(catalog)],
-        "tool_choice": {"type": "any"},
+        "tool_choice": {"type": "auto"},
         "messages": [{
             "role": "user",
             "content": (
