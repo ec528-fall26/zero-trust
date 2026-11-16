@@ -2,21 +2,21 @@
   "schema_version": 1,
   "experiment": "drift-policy",
   "status": "pass",
-  "generated_at": "2026-11-05T00:19:39.994Z",
-  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "generated_at": "2026-11-15T08:40:46.111Z",
+  "repository_revision": "ce01a6332e07fdc965f0bbfe9e9489f7d6e654e8",
   "repository_dirty": true,
   "versions": {
-    "nono": "nono 0.79.0",
-    "node": "v24.11.0",
+    "nono": "nono 0.80.0",
+    "node": "v22.23.2",
     "emilia_require_receipt": "0.9.0"
   },
-  "reference_policy_version": "pd1-a9159e3d6bed9ff773a97a90ac1ba6ccbd5589b9ccf72d4efa29811aab1d",
+  "reference_policy_version": "pd1-b82c290e309b5d53a659f1e48fbacc1bad964c0108235f25fda2d12909a8",
   "scenarios": [
     {
       "name": "consistent_policies_execute",
       "passed": true,
       "observed": "executed_once",
-      "policy_version": "pd1-e301fb05fcd696cdbfdfcfd8442be31330c105be78b20bb9669ab7627814"
+      "policy_version": "pd1-49300c9516fa1c722878d5dc2ee3935273323f2d00446528d1c082f7dc55"
     },
     {
       "name": "keylime_allowlist_changed_on_node",

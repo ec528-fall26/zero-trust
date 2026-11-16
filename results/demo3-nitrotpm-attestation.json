@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "experiment": "demo2-attestation",
+  "status": "pass",
+  "generated_at": "2026-11-16T05:34:11.319Z",
+  "repository_revision": "aa71229286f91443ea886ca43a4b6e26c17fe7f8",
+  "repository_dirty": true,
+  "versions": {
+    "keylime": "not-reported",
+    "nono": "nono 0.80.0",
+    "tpm_type": "nitrotpm"
+  },
+  "action": {
+    "action_type": "workload.execute",
+    "operation": "checksum.sha256",
+    "target": "aws-keylime-demo-01",
+    "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
+    "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+    "occurrence_id": "1fdf8357-fd78-4bdf-8f4b-5dc4977471d5",
+    "policy_version": "demo-2.1"
+  },
+  "scenarios": [
+    {
+      "name": "fresh_attestation_allows_exact_workload",
+      "passed": true,
+      "observed": "executed",
+      "evidence": {
+        "provider": "keylime",
+        "verdict": "trusted",
+        "target": "aws-keylime-demo-01",
+        "policy_version": "demo-2.1",
+        "occurrence_id": "1fdf8357-fd78-4bdf-8f4b-5dc4977471d5",
+        "attested_at": "2026-11-16T05:34:09.000Z",
+        "age_seconds": 2.141,
+        "node_time": "2026-11-16T05:34:11.141Z",
+        "evidence_digest": "sha256:cf28c08c3ab9efba84f03ff2c52aa0521ebb4a46a63898299ca70e0123ba900c"
+      },
+      "workload": {
+        "executed": true,
+        "operation": "checksum.sha256",
+        "artifact_sha256": "sha256:2bc900662b7b9e61ed65e652f17da76aacdb2eb3d61a20318190c5b6afc15e91",
+        "input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+        "stdout": "da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03  /proc/self/fd/4"
+      }
+    },
+    {
+      "name": "mcp_target_binding",
+      "passed": true,
+      "observed": "denied"
+    },
+    {
+      "name": "keylime_unavailable_fails_closed",
+      "passed": true,
+      "observed": "denied"
+    }
+  ],
+  "limitations": [
+    "swtpm is not a hardware root of trust.",
+    "The Keylime verifier, registrar, agent, swtpm and MCP all run on the same instance they are checking. This proves the protocol works, not independent attestation.",
+    "The three EMILIA signer keys are on one machine. This proves the protocol works, not independent human approval."
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "ec528.approver.v1",
+  "role": "operator",
+  "name": "Kimberly Wong",
+  "approver_id": "ep:approver:operator",
+  "key_id": "operator-32d59e69",
+  "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0BncU0jPpAeIaTyxu5ePFdghALRiVeu5rHMqfrK8wnd5yj6MrEjB3xDdwXpHFo4Hkiqvf1-4NdlHeojQH2sIAQ"
+}

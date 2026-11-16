@@ -1,0 +1,382 @@
+{
+  "schema_version": 1,
+  "experiment": "demo3-bridge",
+  "mode": "local",
+  "status": "pass",
+  "generated_at": "2026-11-15T08:40:47.941Z",
+  "repository_revision": "ce01a6332e07fdc965f0bbfe9e9489f7d6e654e8",
+  "repository_dirty": true,
+  "versions": {
+    "node": "v22.23.2"
+  },
+  "launch_evidence": "process_start_records",
+  "summary": {
+    "scenarios_passed": 13,
+    "scenarios_run": 13,
+    "scenarios_not_run": 0
+  },
+  "scenarios": [
+    {
+      "name": "quorum_approved_launch",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "without_receipt": 428,
+        "after_one_approval": "pending",
+        "after_two_approvals": 200,
+        "receipt_replay": 428
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "cb6aa475-bf5e-4a48-b535-cf498685e9df"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.246Z",
+      "completed_at": "2026-11-15T08:40:47.451Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "bearer_token_without_permit",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "80c27caf-af94-4696-8035-59bfd85054bd"
+      ],
+      "process_launches": 0,
+      "started_at": "2026-11-15T08:40:47.451Z",
+      "completed_at": "2026-11-15T08:40:47.471Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "forged_permit",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "436b8770-98d1-4ebd-be87-1f1b9c74de40"
+      ],
+      "process_launches": 0,
+      "started_at": "2026-11-15T08:40:47.471Z",
+      "completed_at": "2026-11-15T08:40:47.492Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "expired_permit",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "452fd36d-154a-4b31-85e5-a29b3f1a48f8"
+      ],
+      "process_launches": 0,
+      "started_at": "2026-11-15T08:40:47.493Z",
+      "completed_at": "2026-11-15T08:40:47.512Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "old_enrollment_epoch",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "fe20666c-cf28-4ea1-a822-7180b732ba1e"
+      ],
+      "process_launches": 0,
+      "started_at": "2026-11-15T08:40:47.512Z",
+      "completed_at": "2026-11-15T08:40:47.539Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "target_substitution",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "488ddf36-b2f6-4a32-9564-ffb09319cdb9"
+      ],
+      "process_launches": 0,
+      "started_at": "2026-11-15T08:40:47.539Z",
+      "completed_at": "2026-11-15T08:40:47.553Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "artifact_substitution",
+      "expected": "refused",
+      "expected_launches": 0,
+      "observed": "refused",
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "bfbb9ca9-feb7-412d-bc6d-c888af7a2c00"
+      ],
+      "process_launches": 0,
+      "started_at": "2026-11-15T08:40:47.553Z",
+      "completed_at": "2026-11-15T08:40:47.568Z",
+      "ledger_launches": 0,
+      "launches": 0,
+      "passed": true
+    },
+    {
+      "name": "staged_input_substituted",
+      "expected": "refused_then_executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "substituted": "refused",
+        "consumed_by_refusal": false,
+        "after_restore": "accepted"
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "75d9c119-951c-43c0-863e-60154e5ceb7e"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.568Z",
+      "completed_at": "2026-11-15T08:40:47.622Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "stale_attestation",
+      "expected": "refused_then_executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "stale": "refused",
+        "consumed_by_refusal": false,
+        "after_fresh_attestation": "accepted"
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "6a1d97fe-d372-432e-875a-2a9a5ddd9fff"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.622Z",
+      "completed_at": "2026-11-15T08:40:47.670Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "permit_replay",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "first": "accepted",
+        "same_permit_again": "refused",
+        "new_permit_same_occurrence": "refused"
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "9a12737e-acd3-4726-af6c-07dc485228dd"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.670Z",
+      "completed_at": "2026-11-15T08:40:47.728Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "race_10_clients",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "deliveries": 10,
+        "accepted": 1
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "c5201bad-5171-4f86-aa54-2f83c560a266"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.728Z",
+      "completed_at": "2026-11-15T08:40:47.833Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "redelivery_after_restart",
+      "expected": "executed_once",
+      "expected_launches": 1,
+      "observed": {
+        "before_restart": "accepted",
+        "after_restart": "refused"
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "1c2a078d-0d2e-4d31-8811-111378f99b90"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.833Z",
+      "completed_at": "2026-11-15T08:40:47.881Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    },
+    {
+      "name": "lost_response_after_launch",
+      "expected": "executed_once_and_receipt_burned",
+      "expected_launches": 1,
+      "observed": {
+        "lost_response": 500,
+        "reason": "effect_indeterminate",
+        "retry_with_same_receipt": 428
+      },
+      "responses_as_expected": true,
+      "occurrence_ids": [
+        "6111d7a2-903d-49f5-b3d4-51ad410a2765"
+      ],
+      "process_launches": 1,
+      "started_at": "2026-11-15T08:40:47.881Z",
+      "completed_at": "2026-11-15T08:40:47.933Z",
+      "ledger_launches": 1,
+      "launches": 1,
+      "passed": true
+    }
+  ],
+  "reconciliation": [
+    {
+      "scenario": "quorum_approved_launch",
+      "occurrence_id": "cb6aa475-bf5e-4a48-b535-cf498685e9df",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.415Z",
+      "finished_at": "2026-11-15T08:40:47.426Z",
+      "action_sha256": "sha256:d974d4406916fe697e8ebdf1660352ddc1eef704b6e89b85504a9e8c9196b510",
+      "receipt_sha256": "sha256:6721218bbc5d640412d9daf23a1d81ccf74b7556af09fc21e8d6ac2f5c9e65b3"
+    },
+    {
+      "scenario": "bearer_token_without_permit",
+      "occurrence_id": "80c27caf-af94-4696-8035-59bfd85054bd",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "forged_permit",
+      "occurrence_id": "436b8770-98d1-4ebd-be87-1f1b9c74de40",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "expired_permit",
+      "occurrence_id": "452fd36d-154a-4b31-85e5-a29b3f1a48f8",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "old_enrollment_epoch",
+      "occurrence_id": "fe20666c-cf28-4ea1-a822-7180b732ba1e",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "target_substitution",
+      "occurrence_id": "488ddf36-b2f6-4a32-9564-ffb09319cdb9",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "artifact_substitution",
+      "occurrence_id": "bfbb9ca9-feb7-412d-bc6d-c888af7a2c00",
+      "state": "never_reserved",
+      "reserved_at": null,
+      "finished_at": null,
+      "action_sha256": null,
+      "receipt_sha256": null
+    },
+    {
+      "scenario": "staged_input_substituted",
+      "occurrence_id": "75d9c119-951c-43c0-863e-60154e5ceb7e",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.602Z",
+      "finished_at": "2026-11-15T08:40:47.613Z",
+      "action_sha256": "sha256:f1a19029c69f4552c7be6e7044be48d9c37c6aa4bc4b438ef8951e3ab6432c31",
+      "receipt_sha256": "sha256:f6b367f1be07ea0fd1bc3858dd73cb8815e02d8b75ed357dc92717eacd95f1a7"
+    },
+    {
+      "scenario": "stale_attestation",
+      "occurrence_id": "6a1d97fe-d372-432e-875a-2a9a5ddd9fff",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.652Z",
+      "finished_at": "2026-11-15T08:40:47.662Z",
+      "action_sha256": "sha256:1dff57bf2a636481006737de911cc4190c5a4164b08df6a2248f1aa50af49594",
+      "receipt_sha256": "sha256:f6b367f1be07ea0fd1bc3858dd73cb8815e02d8b75ed357dc92717eacd95f1a7"
+    },
+    {
+      "scenario": "permit_replay",
+      "occurrence_id": "9a12737e-acd3-4726-af6c-07dc485228dd",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.684Z",
+      "finished_at": "2026-11-15T08:40:47.693Z",
+      "action_sha256": "sha256:e4abfca7a579603e60bf5c6498c666d4735e68f7b4f559e97a28b5236ba2e295",
+      "receipt_sha256": "sha256:1623126585a29ed7e9f756979339fe046226759931a22138be37316b76c6a36c"
+    },
+    {
+      "scenario": "race_10_clients",
+      "occurrence_id": "c5201bad-5171-4f86-aa54-2f83c560a266",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.801Z",
+      "finished_at": "2026-11-15T08:40:47.823Z",
+      "action_sha256": "sha256:2a81db6793bbe7a80278c3f50aa67025cc7d8566c6b2a8ca01ccdb104a39209f",
+      "receipt_sha256": "sha256:f6b367f1be07ea0fd1bc3858dd73cb8815e02d8b75ed357dc92717eacd95f1a7"
+    },
+    {
+      "scenario": "redelivery_after_restart",
+      "occurrence_id": "1c2a078d-0d2e-4d31-8811-111378f99b90",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.848Z",
+      "finished_at": "2026-11-15T08:40:47.855Z",
+      "action_sha256": "sha256:6194b3f0297d418f3462c874c5772f20fd70ab6eacac3762baf869991977e43e",
+      "receipt_sha256": "sha256:1623126585a29ed7e9f756979339fe046226759931a22138be37316b76c6a36c"
+    },
+    {
+      "scenario": "lost_response_after_launch",
+      "occurrence_id": "6111d7a2-903d-49f5-b3d4-51ad410a2765",
+      "state": "succeeded",
+      "reserved_at": "2026-11-15T08:40:47.908Z",
+      "finished_at": "2026-11-15T08:40:47.916Z",
+      "action_sha256": "sha256:19e39ba2cb2118eaaee4598d5294855ae6a7d19c09b8c2437f52029775f14bc2",
+      "receipt_sha256": "sha256:082c213fa85f275085970a67c943e49a8f45269661b7d7a7481f8554e200cd14"
+    }
+  ],
+  "limitations": [
+    "Keylime status is a local stand-in socket. The HTTP and MCP path, permit checks, launch ledger and descriptor-bound execution are the real node code.",
+    "Launches are counted from records the workload process writes when it starts.",
+    "The three EMILIA approver keys are ephemeral demo keys on one machine.",
+    "The node verifies the controller's permit signature, not the approvers' signatures.",
+    "The restart scenario restarts the MCP service; it does not reboot the node or roll back a snapshot.",
+    "The workload runs as the same user as the MCP service, which could alter the launch ledger."
+  ]
+}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zero Trust Cryptography: Demo 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0F1218;--panel:#171B23;--panel2:#1D222C;--line:#2C3340;--text:#E8E5DD;--muted:#9AA3B2;--ok:#4FB37E;--okbg:#14261D;--bad:#E0714A;--badbg:#2A1912;--pend:#E5B34B;--pendbg:#2A2312;--blue:#7FA6EA}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:44px 40px 60px}
+h1{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:44px;margin:0 0 12px}
+.rule{width:56px;height:3px;background:#E0A15B;margin-bottom:22px}
+.note{color:var(--muted);font-size:16px;line-height:1.6;margin:0 0 6px}.note b{color:var(--text);font-weight:600}
+.tabs{display:flex;gap:6px;margin:26px 0 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tab{background:none;border:none;color:var(--muted);font:500 15px Inter;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent}
+.tab.on{color:var(--text);border-bottom-color:var(--text)}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0}
+.bar .lbl{color:var(--muted);font-size:15px;width:96px}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);font:500 14px Inter;padding:9px 14px;border-radius:6px;cursor:pointer}
+.btn:hover{border-color:#566075}.btn.sel{border-color:var(--blue);color:#fff}
+.btn.play{background:#2F5DA8;border-color:#2F5DA8}
+.pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;background:var(--panel);border-radius:10px;padding:26px 20px;margin-top:18px}
+.box{border:2px solid var(--line);border-radius:8px;padding:18px 10px;text-align:center;min-height:132px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all .35s;position:relative}
+.box .k{font:600 12px "JetBrains Mono";color:#E0A15B}.box .t{font:500 19px "Space Grotesk"}.box .s{font-size:13px;color:var(--muted);line-height:1.4}
+.box.ok{border-color:var(--ok);background:var(--okbg)}.box.bad{border-color:var(--bad);background:var(--badbg)}.box.pend{border-color:var(--pend);background:var(--pendbg)}
+.box.active{box-shadow:0 0 0 4px rgba(127,166,234,.25)}
+.dots{display:flex;gap:6px;margin-top:4px}.dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--muted)}.dot.on{background:var(--ok);border-color:var(--ok)}
+.status{background:var(--panel);border-radius:10px;padding:22px 26px;margin-top:14px}
+.status h2{font:500 26px "Space Grotesk";margin:0 0 6px}.status p{margin:0;color:var(--muted);font-size:16px;line-height:1.5}
+.grid2{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-top:14px}
+.card{background:var(--panel);border-radius:10px;padding:20px 22px}
+.card h3{font:500 17px "Space Grotesk";margin:0 0 12px;color:var(--text)}
+.tl{list-style:none;margin:0;padding:0;font-size:14px}.tl li{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);opacity:.35;transition:opacity .3s}
+.tl li.shown{opacity:1}.tl .tm{font-family:"JetBrains Mono";color:var(--muted);width:78px;flex:none}.tl .oc{margin-left:auto;font-size:12px;font-weight:600}
+.ok-t{color:var(--ok)}.bad-t{color:var(--bad)}.pend-t{color:var(--pend)}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:500}
+.mono{font-family:"JetBrains Mono";font-size:13px}
+.big{font:700 52px "Space Grotesk";color:var(--blue)}.bigrow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}.bigrow .card p{color:var(--muted);font-size:14px;margin:6px 0 0;line-height:1.45}
+.lat{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px}.lat .w{width:70px;color:var(--muted)}.lat .b{height:16px;border-radius:3px}
+.chip{display:inline-flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 14px;margin:4px 6px 4px 0;font-size:14px}
+.foot{color:var(--muted);font-size:13px;margin-top:24px}
+</style></head><body><div class="wrap">
+<h1>Zero Trust Cryptography: Demo 3</h1><div class="rule"></div>
+<p class="note"><b>Replay of recorded runs.</b> Every value on this page comes from the result files in <span class="mono">results/</span> on the <span class="mono">demo-3</span> branch. Nothing here runs live or is simulated.</p>
+<p class="note" id="realline"></p>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+<p class="foot">Pipeline: nono-confined agent → trusted watcher → EMILIA 2-of-3 receipt → receipt gate and signed permit → Keylime attestation → one launch on AWS.</p>
+</div>
+<script>
+const D=__DATA__;
+const NAMES={reviewer:"Youwei Chen",security:"Mitchell Freitas",operator:"Kimberly Wong"};
+const T=t=>new Date(t).toISOString().slice(11,19);
+const STAGES=[["nono","Agent"],["trusted","Watcher"],["EMILIA","Approvals"],["EMILIA","Receipt gate"],["Keylime","Attestation"],["AWS","Workload"]];
+const SC={
+ no_receipt:{label:"Try without receipt",stop:3,state:{2:"",3:"bad"},msg:"Denied before anything ran",why:"No quorum receipt: the gate answered HTTP 428 and the node was never asked."},
+ one_of_three_signatures:{label:"One signature only",stop:3,state:{2:"pend",3:"bad"},sig:1,msg:"Pending, still denied",why:"One of three signatures is not a quorum: no receipt is issued (HTTP 428)."},
+ action_changed_after_approval:{label:"Change action after approval",stop:3,state:{2:"ok",3:"bad"},sig:2,msg:"Denied: action changed",why:"The receipt is bound to the exact action hash. A changed target or input no longer matches (action_hash_mismatch)."},
+ exact_action_end_to_end:{label:"Run approved workload",stop:5,state:{2:"ok",3:"ok",4:"ok",5:"ok"},sig:2,msg:"Launched exactly once",why:"Two distinct approvals, receipt verified and used, fresh attestation rated trusted, workload executed."},
+ used_receipt_replay:{label:"Replay used receipt",stop:3,state:{2:"ok",3:"bad"},sig:2,msg:"Denied: replay",why:"A receipt is consumed on first use; the second attempt is refused (replay_refused)."},
+ keylime_agent_stopped:{label:"Stop Keylime agent",stop:4,state:{2:"ok",3:"ok",4:"bad"},sig:2,msg:"Denied: attestation not fresh",why:"With the Keylime agent stopped there is no fresh quote, so the node fails closed and nothing launches."},
+ keylime_agent_recovered:{label:"Keylime recovered",stop:5,state:{2:"ok",3:"ok",4:"ok",5:"ok"},sig:2,msg:"Allowed again after recovery",why:"Once the agent is back and the quote is fresh and trusted, the approved launch proceeds."}
+};
+let tab="e2e",timer=null;
+function tabs(){const L=[["e2e","Full chain · AWS · two people + live AI"],["nitro","Full chain · NitroTPM · live AI"],["human","Two-person approval"],["trials","Trials and latency"]];
+ document.getElementById("tabs").innerHTML=L.map(([k,v])=>`<button class="tab ${k==tab?"on":""}" onclick="go('${k}')">${v}</button>`).join("");}
+function go(k){tab=k;try{location.hash=k}catch(e){}clearInterval(timer);render();}
+function pipe(r){const tpm=r.tpm_type==="nitrotpm"?"NitroTPM (hardware)":"swtpm (software)";
+ const sub=["Claude in nono",`rebuilds the action`,`<span id=sigtxt>0 of 2 approvals</span><div class=dots id=dots><i class=dot></i><i class=dot></i><i class=dot></i></div>`,"receipt + 10 s permit",`${tpm}`,"not run"];
+ return `<div class=pipe>${STAGES.map((s,i)=>`<div class=box id=b${i}><span class=k>${s[0]}</span><span class=t>${s[1]}</span><span class=s>${sub[i]}</span></div>`).join("")}</div>`;}
+function setBoxes(st,sig,active){for(let i=0;i<6;i++){const b=document.getElementById("b"+i);b.className="box"+(st[i]?" "+st[i]:"")+(i===active?" active":"");}
+ const ds=document.querySelectorAll("#dots .dot");ds.forEach((d,i)=>d.classList.toggle("on",i<(sig||0)));const t=document.getElementById("sigtxt");if(t)t.textContent=`${sig||0} of 2 approvals`;
+ const w=document.querySelector("#b5 .s");if(w)w.textContent=st[5]==="ok"?"executed once":"not run";}
+function status(h,p){document.getElementById("st").innerHTML=`<h2>${h}</h2><p>${p}</p>`;}
+function chain(r){const human=r.approver_mode==="human";
+ document.getElementById("realline").innerHTML=human?`<b>Real in this run:</b> live Claude model (${r.model}) in nono, two teammates signing from their own laptops, Keylime on AWS with ${r.tpm_type}. Run ${r.generated_at.slice(0,16).replace("T"," ")} UTC.`
+ :`<b>Real in this run:</b> live Claude model (${r.model}) in nono, Keylime attestation from AWS <b>NitroTPM hardware</b>. Approvals use labelled automated test keys; the two-person run is the first tab. Run ${r.generated_at.slice(0,16).replace("T"," ")} UTC.`;
+ const scen=r.scenarios.map(s=>`<button class=btn data-s="${s.name}" onclick="scen('${s.name}')">${(SC[s.name]||{label:s.name}).label}</button>`).join("");
+ const appr=human&&r.human_approvals?r.human_approvals.accepted.map(a=>`<span class=chip>✓ ${NAMES[a.role]||a.role} <span class=mono style="color:var(--muted)">${a.role}, +${Math.round(a.seconds_after_request)} s</span></span>`).join(""):`<span class=chip>Automated test keys (labelled)</span>`;
+ const ti=D.tool_input;
+ document.getElementById("view").innerHTML=`<div class=bar><span class=lbl>Replay:</span><button class="btn play" onclick="play()">▶ Play the run</button></div>
+ <div class=bar><span class=lbl>Scenarios:</span>${scen}</div>${pipe(r)}
+ <div class=status id=st></div>
+ <div class=grid2><div class=card><h3>Timeline from the result file</h3><ul class=tl id=tl>${r.timeline.map((t,i)=>`<li id=t${i}><span class=tm>${T(t.at)}</span><span>${t.step.replace(/_/g," ")}</span><span class="oc ${t.outcome=="pending"?"pend-t":"ok-t"}">${t.outcome.replace(/_/g," ")}</span></li>`).join("")}</ul></div>
+ <div class=card><h3>The agent's request</h3><table><tr><td>Model</td><td class=mono>${r.model}</td></tr><tr><td>Target</td><td class=mono>${ti.target}</td></tr><tr><td>Input</td><td class=mono>${ti.input_name}</td></tr><tr><td>Hash</td><td class=mono>${ti.expected_input_sha256.slice(0,23)}…</td></tr></table>
+ <h3 style="margin-top:18px">Approvals</h3>${appr}
+ <h3 style="margin-top:18px">Scenario results</h3><table>${r.scenarios.map(s=>`<tr><td>${(SC[s.name]||{label:s.name}).label}</td><td class="${s.passed?"ok-t":"bad-t"}">${s.passed?"as expected":"FAILED"}</td><td class=mono>${s.status??""} ${s.reason??""}</td></tr>`).join("")}</table></div></div>`;
+ setBoxes({},0,-1);status("Ready","The confined agent wrote one request file. Press play to replay the run step by step, or pick a scenario.");}
+function scen(n){clearInterval(timer);const s=SC[n];document.querySelectorAll("[data-s]").forEach(b=>b.classList.toggle("sel",b.dataset.s===n));
+ const st=Object.assign({0:"ok",1:"ok"},s.state);setBoxes(st,s.sig,s.stop);const r=D[tab].scenarios.find(x=>x.name===n);
+ status(s.msg,`${s.why} <span class=mono>Recorded: ${r.status??""} ${r.reason??""}${r.verdict?" · verdict "+r.verdict:""}${r.executed?" · workload executed":""}</span>`);}
+function play(){clearInterval(timer);const r=D[tab];const tl=r.timeline;let i=0;const st={};let sig=0;
+ document.querySelectorAll(".tl li").forEach(l=>l.classList.remove("shown"));setBoxes({},0,-1);
+ const map={nono_agent_request_written:[0,"ok"],watcher_action_constructed:[1,"ok"],emilia_approval_requested:[2,"pend"],emilia_first_distinct_signature:[2,"pend",1],emilia_second_distinct_signature:[2,"ok",2],keylime_agent_stopped:[4,"bad"],keylime_agent_restarted:[4,"ok"]};
+ const msgs={nono_agent_request_written:["Agent wrote its request","The Claude model chose a target and input from the catalog and published one request. It holds no key that can launch anything."],
+  watcher_action_constructed:["Watcher rebuilt the action","The trusted side recomputed the input hash from the real file and built the exact action to approve."],
+  emilia_approval_requested:["Waiting for approvers","The request went out to the enrolled approvers. Nothing can launch yet."],
+  emilia_first_distinct_signature:["One approval: pending","One valid signature is not enough. The request stays pending."],
+  emilia_second_distinct_signature:["Second person signed: receipt issued","Two different enrolled people approved the exact action. The gate now checks the receipt and the node checks attestation; the approved workload ran once and replays were refused."],
+  keylime_agent_stopped:["Keylime agent stopped","Without a fresh quote the node fails closed: the approved action is refused."],
+  keylime_agent_restarted:["Keylime agent recovered","Fresh trusted attestation again, and the launch is allowed."],
+  readonly_inbox_status_observed:["Agent sees only a read-only status","The agent can read the outcome but never the controller's state."]};
+ timer=setInterval(()=>{if(i>=tl.length){clearInterval(timer);return;}const e=tl[i];document.getElementById("t"+i).classList.add("shown");
+  const m=map[e.step];if(m){st[m[0]]=m[1];if(m[2])sig=m[2];}
+  if(e.step==="emilia_second_distinct_signature"){st[3]="ok";st[4]="ok";st[5]="ok";}
+  setBoxes(st,sig,m?m[0]:-1);if(msgs[e.step])status(...msgs[e.step]);i++;},1100);}
+function human(){const h=D.human;document.getElementById("realline").innerHTML=`<b>Real in this run:</b> three enrolled people; each signs on their own laptop with their own key. The controller holds public keys only. Run ${h.generated_at.slice(0,16).replace("T"," ")} UTC.`;
+ document.getElementById("view").innerHTML=`<div class=card><h3>Enrolled approvers (2 of 3 needed)</h3>${h.approvers.map(a=>`<span class=chip>${a.name} <span class=mono style="color:var(--muted)">${a.role}</span></span>`).join("")}
+ <p class=note style="margin-top:12px">Human wait from request to quorum: <b>${Math.round(h.wait)} s</b></p></div>
+ <div class=card style="margin-top:14px"><h3>Scenarios (${h.scenarios.filter(s=>s.passed).length}/${h.scenarios.length} as expected)</h3><table><tr><th>Scenario</th><th>Expected</th><th>Launches</th><th></th></tr>${h.scenarios.map(s=>`<tr><td>${s.name.replace(/_/g," ")}</td><td>${(s.expected||"").replace(/_/g," ")}</td><td class=mono>${s.launches??""}</td><td class="${s.passed?"ok-t":"bad-t"}">${s.passed?"✓":"✗"}</td></tr>`).join("")}</table></div>`;}
+function trials(){const t=D.trials,L=t.latency;document.getElementById("realline").innerHTML=`<b>Measured:</b> 13 scenarios × 20 trials against the real node code, launches counted from process-start records. Demo 2 ran each scenario once and did not measure latency.`;
+ const mx=Math.max(...t.sizes.map(s=>s.gated.median_ms));
+ document.getElementById("view").innerHTML=`<div class=bigrow><div class=card><div class=big>0</div><p>unauthorized or duplicate launches in ${t.totals.scenario_runs} runs</p></div>
+ <div class=card><div class=big>${t.totals.launches_observed}/${t.totals.launches_expected}</div><p>expected launches observed</p></div>
+ <div class=card><div class=big>${L.overhead_median_ms} ms</div><p>median gate overhead (${L.gated.median_ms} vs ${L.baseline.median_ms} ms, ${L.gated.runs} paired runs)</p></div>
+ <div class=card><div class=big style="color:#E0A15B">0</div><p>launches for a ${(t.over.bytes/1048576).toFixed(0)} MiB input over the node limit: refused</p></div></div>
+ <div class=card style="margin-top:14px"><h3>Workload size: gated vs direct median</h3>${t.sizes.map(s=>`<div class=lat><span class=w>${s.input}</span><div style="flex:1"><div class=b style="width:${s.gated.median_ms/mx*100}%;background:#7FA6EA"></div><div class=b style="margin-top:4px;width:${s.baseline.median_ms/mx*100}%;background:#4A5568"></div></div><span class=mono style="width:200px">${s.gated.median_ms} / ${s.baseline.median_ms} ms</span></div>`).join("")}
+ <p class=note style="margin-top:10px">Blue: through the full gate. Grey: the same node called directly with a valid permit.</p></div>`;}
+function render(){tabs();if(tab==="e2e"||tab==="nitro")chain(D[tab]);else if(tab==="human")human();else trials();}
+const h=(location.hash||"").slice(1);if(["e2e","nitro","human","trials"].includes(h))tab=h;render();
+window.addEventListener("hashchange",()=>{const k=location.hash.slice(1);if(["e2e","nitro","human","trials"].includes(k)&&k!==tab){tab=k;render();}});
+</script></body></html>

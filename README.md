@@ -4,7 +4,9 @@
 
 **Mentor:** Charles Munson (MIT Lincoln Laboratory)
 
-**Demo:** [silent end-to-end recording](slides/demo-2.mp4)
+**Demo 3:** [video](slides/demo-3.mp4) · [slides](slides/demo-3-slides.pdf) · [replay page](docs/demo3-replay.html)
+
+**Demo 2:** [silent end-to-end recording](slides/demo-2.mp4)
 
 ## What this is
 
@@ -31,6 +33,9 @@ python3 -m venv .venv
 make ci PYTHON=.venv/bin/python
 make demo PYTHON=.venv/bin/python
 ```
+
+On Windows, run everything inside an AlmaLinux 10 VM: WSL2 cannot run the nono
+confinement experiment. See [`docs/windows-vm-setup.md`](docs/windows-vm-setup.md).
 
 The local dashboard demonstrates receipt issuance, exact-action binding, and
 replay protection without cloud credentials. The recorded results and demo
