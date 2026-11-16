@@ -546,8 +546,8 @@ nothing live.
 - **The checker and the checked machine are the same.** The Keylime verifier,
   registrar, agent, swtpm, and MCP all run on the one instance being attested.
   A compromised instance could lie about itself.
-- **The three EMILIA signer keys are on one laptop.** This proves the 2-of-3
-  protocol, not independent human approval. Demo 3 adds enrolled approvers
+- **In Demo 2 the three EMILIA signer keys were on one laptop.** That proved the
+  2-of-3 protocol, not independent human approval. Demo 3 adds enrolled approvers
   (Experiment 9): each person signs on their own machine and the controller
   holds only public keys. Those keys are software keys in files, not hardware
   authenticators, and the signoff uses the WebAuthn format without a browser
@@ -581,13 +581,15 @@ nothing live.
 - **nono enforcement was first tested on macOS (Seatbelt).** Experiment 1 also
   passed 9/9 under Linux Landlock in an AlmaLinux 10 VM on Windows 11
   (2026-11-04). It cannot run under WSL2 (see Section 3).
-- **Node-side enforcement is tested locally, not yet on AWS.** Permits and the
-  launch ledger have unit and integration tests over the real HTTP path, but the
-  recorded AWS results predate them and the deploy changes have not been run on
-  a live instance. `make demo2-bootstrap` must run before any workload
-  experiment, because it writes the controller's record of the enrollment to
-  `build/aws-keylime/enrollment.json`. The Azure scripts ship the
-  new modules but do not configure a permit key, so that server refuses to start.
+- **Node-side enforcement has run on AWS, but not every case.** Permits and the
+  launch ledger ran on a live instance in Experiment 8 on AWS (2026-11-14): 11
+  scenarios passed, including a bearer token without a permit, forged, expired
+  and replayed permits, and a 10-client race. `staged_input_substituted` and
+  `stale_attestation` were not run there. `make demo2-bootstrap` must run
+  before any workload experiment, because it writes the controller's record of
+  the enrollment to `build/aws-keylime/enrollment.json`. The Azure scripts ship
+  the new modules but do not configure a permit key, so that server refuses to
+  start.
 - **A permit is the controller's word.** The node verifies the controller's
   signature, not the approvers' signatures. Sending the receipt to the node so
   it can verify the quorum itself is a stronger follow-up.

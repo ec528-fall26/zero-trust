@@ -4,7 +4,9 @@
 
 **Mentor:** Charles Munson (MIT Lincoln Laboratory)
 
-**Demo:** [silent end-to-end recording](slides/demo-2.mp4)
+**Demo 3:** [video](slides/demo-3.mp4) · [slides](slides/demo-3-slides.pdf) · [replay page](docs/demo3-replay.html)
+
+**Demo 2:** [silent end-to-end recording](slides/demo-2.mp4)
 
 ## What this is
 
