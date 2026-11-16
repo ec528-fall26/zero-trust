@@ -9,6 +9,7 @@ const BOUNDS = Object.freeze({
   clock_skew_tolerance_sec: [0, 300],
   fresh_attestation_timeout_sec: [1, 120],
   revocation_list_max_age_sec: [1, 86_400],
+  permit_max_lifetime_sec: [1, 300],
 });
 
 function loadSecurityParameters() {

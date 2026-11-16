@@ -30,7 +30,9 @@ import { promisify } from 'node:util';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
 import { manifestWithReceiptMaxAge } from '../src/controller/receipt_required_mcp.mjs';
 import { clockSkewSeconds, validateKeylimeResult } from '../src/controller/keylime_mcp_client.mjs';
+import { createPermitFixture } from './permit_fixture.mjs';
 import { createAttestAndDeploy } from '../src/keylime_mcp/attest_and_deploy.mjs';
+import { LaunchLedger } from '../src/keylime_mcp/launch_ledger.mjs';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -164,6 +166,10 @@ async function main() {
     // `attestationAgeSeconds` old on that same node clock.
     function nodeHandler({ clockOffsetMs = 0, attestationAgeSeconds = 5 }) {
       const nodeNow = () => Date.now() + clockOffsetMs;
+      // Permits are stamped on the node's clock so these scenarios reach the
+      // controller's own skew check.  In a deployment a node this far off would
+      // refuse the permit first, which is the earlier and safer outcome.
+      const permits = createPermitFixture({ target: TARGET, agentId: AGENT_ID, now: nodeNow });
       let workloadRuns = 0;
       const handler = createAttestAndDeploy({
         statusCommand: '/fixed/status',
@@ -171,6 +177,8 @@ async function main() {
         inputPath,
         target: TARGET,
         agentId: AGENT_ID,
+        permitVerifier: permits.verifier,
+        launchLedger: new LaunchLedger(path.join(root, `ledger-${crypto.randomUUID()}`)),
         policyVersion: POLICY_VERSION,
         requiredOwnerUid: process.getuid(),
         now: nodeNow,
@@ -179,6 +187,7 @@ async function main() {
             return {
               stdout: JSON.stringify({
                 agent_id: AGENT_ID,
+                enrollment_epoch: permits.enrollmentEpoch,
                 results: {
                   attestation_status: 'PASS',
                   last_successful_attestation:
@@ -192,7 +201,10 @@ async function main() {
           return { stdout: `${digest(input).slice(7)}  input.txt\n`, stderr: '' };
         },
       });
-      return { handler, runs: () => workloadRuns };
+      return {
+        handler: (observed) => handler(observed, permits.sign(observed)),
+        runs: () => workloadRuns,
+      };
     }
 
     async function controllerView(node, mutate = (result) => result) {

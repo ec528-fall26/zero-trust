@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { open } from 'node:fs/promises';
 import net from 'node:net';
 
+import { PermitRefused, validEnrollmentEpoch } from './permit.mjs';
 import { SECURITY_PARAMETERS } from '../security_parameters.mjs';
 
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -180,7 +181,11 @@ function parseTenantStatus(stdout, expectedAgentId) {
   if (!Number.isFinite(seconds) || seconds <= 0) {
     throw new Error('Keylime returned no successful attestation timestamp');
   }
-  return { results, attestedAt: new Date(seconds * 1_000) };
+  // Absent or malformed means this node has no enrollment to bind a permit to.
+  const enrollmentEpoch = validEnrollmentEpoch(status.enrollment_epoch)
+    ? status.enrollment_epoch
+    : null;
+  return { results, attestedAt: new Date(seconds * 1_000), enrollmentEpoch };
 }
 
 function attestationCount(results) {
@@ -201,6 +206,8 @@ export function createAttestAndDeploy(options) {
     target,
     agentId,
     policyVersion,
+    permitVerifier,
+    launchLedger,
     maximumAttestationAgeSeconds = SECURITY_PARAMETERS.attestation_max_age_sec,
     requiredOwnerUid = 0,
     now = () => Date.now(),
@@ -233,7 +240,13 @@ export function createAttestAndDeploy(options) {
     throw new TypeError('Keylime MCP server configuration is incomplete');
   }
 
-  return async function attestAndDeploy(action) {
+  if (typeof permitVerifier?.verify !== 'function'
+      || typeof launchLedger?.reserve !== 'function'
+      || typeof launchLedger?.record !== 'function') {
+    throw new TypeError('a permit verifier and a launch ledger are required');
+  }
+
+  return async function attestAndDeploy(action, permit) {
     if (action?.action_type !== 'workload.execute'
         || action.operation !== 'checksum.sha256'
         || action.target !== target
@@ -243,6 +256,9 @@ export function createAttestAndDeploy(options) {
         || !UUID_PATTERN.test(action.occurrence_id)) {
       throw new Error('action does not match the Keylime MCP policy');
     }
+    // Checked before anything else touches Keylime or the workload, and only
+    // once: a fresh-attestation wait below can outlast the permit's lifetime.
+    const verifiedPermit = permitVerifier.verify(permit, { tool: 'attest_and_deploy', action });
     const readStatus = async () => {
       const { stdout } = statusSocket
         ? await readStatusSocket(statusSocket)
@@ -252,7 +268,7 @@ export function createAttestAndDeploy(options) {
         });
       return parseTenantStatus(stdout, agentId);
     };
-    let { results, attestedAt } = await readStatus();
+    let { results, attestedAt, enrollmentEpoch } = await readStatus();
     let freshness = null;
     if (requireFreshAttestation) {
       const before = attestationCount(results);
@@ -263,7 +279,7 @@ export function createAttestAndDeploy(options) {
           throw new Error('Keylime did not attest again after the request in time');
         }
         await sleep(freshAttestationPollMilliseconds);
-        ({ results, attestedAt } = await readStatus());
+        ({ results, attestedAt, enrollmentEpoch } = await readStatus());
         count = attestationCount(results);
         if (count < before) throw new Error('Keylime attestation count went backwards');
       }
@@ -273,6 +289,9 @@ export function createAttestAndDeploy(options) {
     if (attestedAt.getTime() > current + 5_000
         || current - attestedAt.getTime() > maximumAttestationAgeSeconds * 1_000) {
       throw new Error('Keylime attestation is stale');
+    }
+    if (enrollmentEpoch === null || verifiedPermit.enrollment_epoch !== enrollmentEpoch) {
+      throw new PermitRefused('enrollment_epoch_mismatch');
     }
     const artifactHandle = await openVerifiedProtectedFile(
       artifactPath,
@@ -292,6 +311,28 @@ export function createAttestAndDeploy(options) {
       await artifactHandle.close();
       throw error;
     }
+    // Every check has passed.  Claim the occurrence durably, then launch.  A
+    // failure to record the outcome leaves the entry at `reserved`, which means
+    // "unknown" and must not replace the result of the launch itself.
+    const launchOnce = async (file, args, runOptions) => {
+      const claimed = await launchLedger.reserve(action.occurrence_id, {
+        action_sha256: verifiedPermit.action_sha256,
+        receipt_sha256: verifiedPermit.receipt_sha256,
+        enrollment_epoch: verifiedPermit.enrollment_epoch,
+      });
+      if (!claimed) throw new Error('this occurrence has already been launched');
+      const recordOutcome = (outcome) => launchLedger.record(action.occurrence_id, outcome)
+        .catch(() => process.stderr.write('keylime-mcp: launch outcome was not recorded\n'));
+      let outcome;
+      try {
+        outcome = await commandRunner(file, args, runOptions);
+      } catch (error) {
+        await recordOutcome('failed');
+        throw error;
+      }
+      await recordOutcome('succeeded');
+      return outcome;
+    };
     let execution;
     try {
       if (process.platform !== 'linux' && commandRunner === runCommand) {
@@ -300,7 +341,7 @@ export function createAttestAndDeploy(options) {
       // Duplicate the already-verified descriptors into fixed child FDs.  The
       // child executes and reads /proc/self/fd rather than reopening mutable
       // paths after verification.
-      execution = await commandRunner('/proc/self/fd/3', ['/proc/self/fd/4'], {
+      execution = await launchOnce('/proc/self/fd/3', ['/proc/self/fd/4'], {
         timeout: 15_000,
         maxBuffer: 64 * 1024,
         stdio: ['ignore', 'pipe', 'pipe', artifactHandle.fd, inputHandle.fd],

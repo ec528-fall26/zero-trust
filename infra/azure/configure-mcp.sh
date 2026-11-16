@@ -31,6 +31,9 @@ scp "${ssh_args[@]}" \
   "$repository/src/keylime_mcp/attest_and_deploy.mjs" \
   "$repository/src/keylime_mcp/bootstrap_tenant.mjs" \
   "$repository/src/keylime_mcp/config.mjs" \
+  "$repository/src/keylime_mcp/launch_ledger.mjs" \
+  "$repository/src/keylime_mcp/mcp_http.mjs" \
+  "$repository/src/keylime_mcp/permit.mjs" \
   "$repository/src/keylime_mcp/policy_digest.mjs" \
   "$repository/src/keylime_mcp/server.mjs" \
   "$ssh_user@$host:/tmp/ec528-mcp/src/keylime_mcp/"

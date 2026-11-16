@@ -12,6 +12,11 @@ case "$require_fresh_attestation" in
   *) echo "fresh attestation must be 0 or 1" >&2; exit 64 ;;
 esac
 
+permit_public_base64=${3:-}
+case "$permit_public_base64" in
+  ''|*[!A-Za-z0-9+/=]*) echo "a base64 launch-permit public key is required" >&2; exit 64 ;;
+esac
+
 for _attempt in $(seq 1 120); do
   bootstrap_state=$(cat /var/lib/ec528-bootstrap-result 2>/dev/null || true)
   case "$bootstrap_state" in keylime-bootstrap-pending|keylime-ready) break ;; esac
@@ -39,6 +44,9 @@ umask 077
 openssl rand -hex 32 > /etc/ec528-keylime-mcp-token
 chown root:ec528-mcp /etc/ec528-keylime-mcp-token
 chmod 0640 /etc/ec528-keylime-mcp-token
+printf %s "$permit_public_base64" | base64 --decode > /etc/ec528-permit-public-key.pem
+chown root:ec528-mcp /etc/ec528-permit-public-key.pem
+chmod 0640 /etc/ec528-permit-public-key.pem
 
 # The MCP runs with NoNewPrivileges=true, so it cannot use sudo.  Instead a
 # root-owned helper answers on a socket that only the ec528-mcp group can open.
@@ -120,6 +128,8 @@ Type=simple
 User=ec528-mcp
 Group=ec528-mcp
 Environment=KEYLIME_MCP_TOKEN_FILE=/etc/ec528-keylime-mcp-token
+Environment=KEYLIME_PERMIT_PUBLIC_KEY_FILE=/etc/ec528-permit-public-key.pem
+Environment=KEYLIME_LAUNCH_LEDGER_DIR=/var/lib/ec528-launch-ledger
 Environment=KEYLIME_STATUS_SOCKET=/run/ec528/keylime-status.sock
 Environment=KEYLIME_BOOTSTRAP_SOCKET=/run/ec528/keylime-bootstrap.sock
 Environment=KEYLIME_WORKLOAD_ARTIFACT=/opt/ec528/workloads/checksum.sh
@@ -135,6 +145,8 @@ Restart=on-failure
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
+StateDirectory=ec528-launch-ledger
+StateDirectoryMode=0700
 ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true

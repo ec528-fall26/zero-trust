@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
+import { permitSignerFromEnvironment } from '../src/controller/permit_signer.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
 import {
   addEvent,
@@ -283,6 +284,7 @@ async function runExperiment() {
       tokenBytes.fill(0);
     }
     const keylimeHandler = tracedKeylimeHandler(createKeylimeMcpHandler({
+      permitSigner: await permitSignerFromEnvironment(repositoryRoot),
       endpoint,
       token,
       allowInsecureLoopback: true,

@@ -146,6 +146,25 @@ done
   exit 75
 }
 
+# The controller's launch-permit key.  The private half stays in build/ (ignored
+# by Git); only the public half is sent to the node.  An existing key is reused
+# so a redeploy does not invalidate the controller's configuration.
+permit_key="$repository/build/aws-keylime/permit-key.pem"
+install -d -m 0700 "$repository/build/aws-keylime"
+if [ ! -f "$permit_key" ]; then
+  (umask 077; node -e '
+const { generateKeyPairSync } = require("node:crypto");
+const { privateKey } = generateKeyPairSync("ed25519");
+process.stdout.write(privateKey.export({ type: "pkcs8", format: "pem" }));
+' > "$permit_key")
+fi
+permit_public_base64=$(node -e '
+const { createPublicKey, createPrivateKey } = require("node:crypto");
+const { readFileSync } = require("node:fs");
+const publicKey = createPublicKey(createPrivateKey(readFileSync(process.argv[1], "utf8")));
+process.stdout.write(Buffer.from(publicKey.export({ type: "spki", format: "pem" })).toString("base64"));
+' "$permit_key")
+
 bundle=$(mktemp /tmp/ec528-mcp-bundle.XXXXXX)
 trap 'rm -f "$bundle"' EXIT HUP INT TERM
 tar -C "$repository" -czf "$bundle" \
@@ -158,14 +177,16 @@ tar -C "$repository" -czf "$bundle" \
   infra/aws/install-mcp.sh
 bundle_base64=$(base64 < "$bundle" | tr -d '\n')
 parameters=$(BUNDLE_BASE64="$bundle_base64" \
-  REQUIRE_FRESH_ATTESTATION="$require_fresh_attestation" node -e '
+  REQUIRE_FRESH_ATTESTATION="$require_fresh_attestation" \
+  PERMIT_PUBLIC_BASE64="$permit_public_base64" node -e '
 const payload = process.env.BUNDLE_BASE64;
 const requireFreshAttestation = process.env.REQUIRE_FRESH_ATTESTATION;
+const permitPublicKey = process.env.PERMIT_PUBLIC_BASE64;
 const commands = [
   "set -eu",
   "install -d -o root -g root -m 0755 /opt/ec528-zero-trust",
   `printf %s ${JSON.stringify(payload)} | base64 --decode | tar -xzf - -C /opt/ec528-zero-trust`,
-  `bash /opt/ec528-zero-trust/infra/aws/install-mcp.sh d432fbb3-d2f1-4a97-9ef7-75bd81c00000 ${requireFreshAttestation}`,
+  `bash /opt/ec528-zero-trust/infra/aws/install-mcp.sh d432fbb3-d2f1-4a97-9ef7-75bd81c00000 ${requireFreshAttestation} ${permitPublicKey}`,
 ];
 process.stdout.write(JSON.stringify({ commands, executionTimeout: ["900"] }));
 ')

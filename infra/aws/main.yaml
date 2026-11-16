@@ -313,7 +313,13 @@ Resources:
           status = candidates[0]
           if agent_id not in status or len(status) != 1:
               raise SystemExit("unexpected Keylime status shape")
-          print(json.dumps({"agent_id": agent_id, "results": status[agent_id]}, separators=(",", ":")))
+          # The occurrence of the quorum-approved bootstrap identifies this
+          # enrollment.  Before bootstrap there is no epoch, and workloads are denied.
+          try:
+              enrollment_epoch = json.load(open("/var/lib/ec528/bootstrap-result.json", encoding="utf-8"))["occurrence_id"]
+          except FileNotFoundError:
+              enrollment_epoch = None
+          print(json.dumps({"agent_id": agent_id, "enrollment_epoch": enrollment_epoch, "results": status[agent_id]}, separators=(",", ":")))
           ' '$agent_uuid' "\$temporary"
           STATUS
           chmod 0755 /usr/local/libexec/ec528-keylime-status

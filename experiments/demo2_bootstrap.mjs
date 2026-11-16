@@ -6,6 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createKeylimeBootstrapHandler } from '../src/controller/keylime_bootstrap_client.mjs';
+import {
+  bootstrapPermitSignerFromEnvironment,
+  enrollmentRecordPath,
+} from '../src/controller/permit_signer.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -126,6 +130,7 @@ async function main() {
       stateDirectory: root,
       toolName: 'bootstrap_keylime_tenant',
       keylimeHandler: createKeylimeBootstrapHandler({
+        permitSigner: await bootstrapPermitSignerFromEnvironment(repository, action.agent_uuid),
         endpoint,
         token,
         allowInsecureLoopback: true,
@@ -165,6 +170,19 @@ async function main() {
     await writeFile(temporary, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
     await chmod(temporary, 0o600);
     await rename(temporary, outputPath);
+    if (evidence.status === 'pass') {
+      // The controller's record of this enrollment.  Workload permits carry this
+      // epoch, so they stop working if the node is rebuilt and bootstrapped again.
+      const enrollmentPath = enrollmentRecordPath(repository);
+      await mkdir(path.dirname(enrollmentPath), { recursive: true, mode: 0o700 });
+      const enrollmentTemporary = `${enrollmentPath}.${process.pid}.tmp`;
+      await writeFile(enrollmentTemporary, `${JSON.stringify({
+        schema_version: 1,
+        agent_uuid: action.agent_uuid,
+        enrollment_epoch: action.occurrence_id,
+      }, null, 2)}\n`, { mode: 0o600 });
+      await rename(enrollmentTemporary, enrollmentPath);
+    }
     process.stdout.write(`${outputPath}\n`);
     if (evidence.status !== 'pass') process.exitCode = 1;
   } finally {

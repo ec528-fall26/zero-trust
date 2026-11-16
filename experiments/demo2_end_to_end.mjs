@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { createKeylimeMcpHandler } from '../src/controller/keylime_mcp_client.mjs';
+import { permitSignerFromEnvironment } from '../src/controller/permit_signer.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
 import { assertSandboxCannotRead } from './sandbox_check.mjs';
 import {
@@ -314,7 +315,7 @@ async function runExperiment() {
         '--strict-broker-path',
         '--audit-integrity',
         '--', '/bin/sh', '-c',
-        `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 -D > ${shellQuote(requestPath)}`,
+        `printf %s ${shellQuote(encodedRequest)} | /usr/bin/base64 --decode > ${shellQuote(requestPath)}`,
       ], { timeout: 30_000 })
     ));
     mark('nono_agent_request_written', 'success', { request_id: requestId });
@@ -363,6 +364,7 @@ async function runExperiment() {
       tokenBytes.fill(0);
     }
     const keylimeHandler = tracedKeylimeHandler(createKeylimeMcpHandler({
+      permitSigner: await permitSignerFromEnvironment(repositoryRoot),
       endpoint,
       token,
       allowInsecureLoopback: true,
@@ -458,7 +460,9 @@ async function runExperiment() {
     mark('keylime_agent_restarted', 'success');
 
     const recoveryController = await createDemoController({
-      action,
+      // A new approval is a new occurrence: the node's launch ledger has already
+      // recorded `action`, from the exact_action_end_to_end scenario.
+      action: { ...action, occurrence_id: crypto.randomUUID() },
       artifactPath,
       inputPath,
       keylimeHandler,

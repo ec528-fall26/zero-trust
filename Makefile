@@ -1,4 +1,4 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift ima-tamper jaeger trace-replay demo-record fetch-token ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift demo3-bridge demo3-bridge-aws ima-tamper jaeger trace-replay demo-record fetch-token ci
 
 # Prefer the project virtualenv (it has jsonschema) and fall back to python3.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
@@ -13,6 +13,10 @@ check:
 	node --check src/keylime_mcp/attest_and_deploy.mjs
 	node --check src/keylime_mcp/config.mjs
 	node --check src/keylime_mcp/policy_digest.mjs
+	node --check src/controller/permit_signer.mjs
+	node --check src/keylime_mcp/launch_ledger.mjs
+	node --check src/keylime_mcp/mcp_http.mjs
+	node --check src/keylime_mcp/permit.mjs
 	node --check src/keylime_mcp/server.mjs
 	node --check src/keylime_mcp/bootstrap_tenant.mjs
 	node --check src/security_parameters.mjs
@@ -58,6 +62,15 @@ drift-identity:
 	./experiments/drift_identity.sh
 
 drift: drift-policy drift-time drift-revocation drift-identity
+
+# Demo 3 bound, restart-safe handoff.  Local by default (Linux, no cloud).
+demo3-bridge:
+	./experiments/demo3_bridge.sh
+
+# The same scenarios against the deployed node: run make demo2-bootstrap and
+# infra/aws/prepare-demo.sh first.  Opens its own SSM tunnel.
+demo3-bridge-aws:
+	./experiments/demo3_bridge.sh --aws results/demo3-bridge-aws.json
 
 # Needs the AWS stack and leaves its node in the failed state; tear down after.
 ima-tamper:

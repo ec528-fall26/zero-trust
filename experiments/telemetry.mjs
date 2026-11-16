@@ -103,11 +103,11 @@ export function recordedSpan(name, startTime, endTime, attributes, parentContext
 
 // Wrap the Keylime MCP call so each attestation-and-run attempt is a span.
 export function tracedKeylimeHandler(handler) {
-  return (action) => withSpan('keylime.mcp.attest_and_deploy', {
+  return (action, extra) => withSpan('keylime.mcp.attest_and_deploy', {
     'ec528.target': action?.target,
     'ec528.occurrence_id': action?.occurrence_id,
   }, async (span) => {
-    const result = await handler(action);
+    const result = await handler(action, extra);
     setAttributes(span, {
       'keylime.verdict': result?.attestation?.verdict,
       'workload.executed': result?.workload?.executed,

@@ -461,7 +461,10 @@ export async function createReceiptRequiredDispatcher(options) {
         receipt_id_digest: crypto.createHash('sha256').update(check.receiptId).digest('hex'),
       });
       try {
-        const handlerResult = await handler(observedAction, extra);
+        const handlerResult = await handler(observedAction, {
+          ...extra,
+          receiptId: check.receiptId,
+        });
         await audit({ decision: 'allow', reason: 'effect_succeeded', tool: name });
         return handlerResult;
       } catch (error) {

@@ -6,6 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { createAttestAndDeploy } from '../src/keylime_mcp/attest_and_deploy.mjs';
+import { LaunchLedger } from '../src/keylime_mcp/launch_ledger.mjs';
+import { createPermitFixture } from '../experiments/permit_fixture.mjs';
 import { validateKeylimeResult } from '../src/controller/keylime_mcp_client.mjs';
 
 function digest(value) {
@@ -25,7 +27,14 @@ async function fixture({ statuses, ...options }) {
   // Fake clock: sleeping advances it, so timeouts need no real waiting.
   let clock = Date.now();
   const state = { statusReads: 0, workloadRuns: 0, sleeps: [] };
-  const handler = createAttestAndDeploy({
+  const permits = createPermitFixture({
+    target: 'azure-vm-demo-01',
+    agentId: 'agent-test',
+    now: () => clock,
+  });
+  const nodeHandler = createAttestAndDeploy({
+    permitVerifier: permits.verifier,
+    launchLedger: new LaunchLedger(path.join(root, 'launch-ledger')),
     statusCommand: '/fixed/status',
     artifactPath,
     inputPath,
@@ -46,6 +55,7 @@ async function fixture({ statuses, ...options }) {
         return {
           stdout: JSON.stringify({
             agent_id: 'agent-test',
+            enrollment_epoch: permits.enrollmentEpoch,
             results: {
               attestation_status: entry.status ?? 'PASS',
               last_successful_attestation: Math.floor(clock / 1_000),
@@ -69,6 +79,7 @@ async function fixture({ statuses, ...options }) {
     occurrence_id: crypto.randomUUID(),
     policy_version: 'demo-2.1',
   };
+  const handler = (requested) => nodeHandler(requested, permits.sign(requested));
   return { handler, action, state, cleanup: () => rm(root, { recursive: true, force: true }) };
 }
 
