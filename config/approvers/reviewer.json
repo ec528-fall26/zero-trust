@@ -1,0 +1,8 @@
+{
+  "schema": "ec528.approver.v1",
+  "role": "reviewer",
+  "name": "Youwei Chen",
+  "approver_id": "ep:approver:reviewer",
+  "key_id": "reviewer-206d14c4",
+  "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEvR92wxRyBcUxznInsFiqV08jaBqgDTRi6I4T8qG5_57TaQexPRjIBlvytt36k-67PB2FwOPinaqb1ks__Y0Ymw"
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "ec528.approver.v1",
+  "role": "security",
+  "name": "Mitchell Freitas",
+  "approver_id": "ep:approver:security",
+  "key_id": "security-3043c0d3",
+  "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE_GUqoHaC-I0rctqbFPccb7JAtPHi-YZq5bM3Sr6VkVE7AXW5B-ZOIAU9Qp4Jw8G6OP9z-lCsh3Ax4JkPtYwGmA"
+}
