@@ -500,6 +500,10 @@ the block below). "Dirty tree" means the run used uncommitted changes, which
 were committed straight afterwards. Approvals in the NitroTPM run are fixture
 keys; the two-person approval was run on the swtpm node the same night.
 
+`make demo3-replay` builds `docs/demo3-replay.html` from the same files: a page
+that replays the recorded runs step by step (open it in a browser). It runs
+nothing live.
+
 <!-- demo3-summary:start -->
 | Experiment | Result | Detail |
 | --- | --- | --- |

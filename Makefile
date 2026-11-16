@@ -1,4 +1,4 @@
-.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift demo3-bridge demo3-bridge-aws demo3-human-approval demo3-human-approval-fixture demo3-trials demo3-trials-aws demo3-local demo3-model-agent demo3-claude-agent demo3-model-agent-replay demo3-summary ima-tamper jaeger trace-replay demo-record fetch-token ci
+.PHONY: check test test-python test-node integration-nono demo demo-no-browser demo2-authorization demo2-bootstrap demo2-attestation drift-policy drift-time drift-revocation drift-identity drift demo3-bridge demo3-bridge-aws demo3-human-approval demo3-human-approval-fixture demo3-trials demo3-trials-aws demo3-local demo3-model-agent demo3-claude-agent demo3-model-agent-replay demo3-summary demo3-replay ima-tamper jaeger trace-replay demo-record fetch-token ci
 
 # Prefer the project virtualenv (it has jsonschema) and fall back to python3.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
@@ -119,6 +119,10 @@ demo3-model-agent-replay:
 # Markdown table of every Demo 3 result in results/, for the design document.
 demo3-summary:
 	@node experiments/demo3_summary.mjs --write-doc
+
+# Page that replays the recorded Demo 3 runs: docs/demo3-replay.html.
+demo3-replay:
+	$(PYTHON) tools/demo3_replay.py
 
 # Needs the AWS stack and leaves its node in the failed state; tear down after.
 ima-tamper:
