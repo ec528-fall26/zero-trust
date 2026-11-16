@@ -1,0 +1,121 @@
+{
+  "experiment": "demo3_human_approval",
+  "schema_version": 1,
+  "generated_at": "2026-11-16T03:20:13.224Z",
+  "repository_revision": "5311bd918181664c7bb7bb14fcd14193c77c5cea",
+  "repository_dirty": false,
+  "approver_mode": "human",
+  "status": "pass",
+  "approvers": [
+    {
+      "role": "operator",
+      "name": "Kimberly Wong",
+      "key_fingerprint": "sha256:32d59e69f0574f429c9213874401ced69ef097e05cf3d8868e6edf173013eca2"
+    },
+    {
+      "role": "reviewer",
+      "name": "Youwei Chen",
+      "key_fingerprint": "sha256:206d14c4c9a7303288e34520e69392c4c540e70938f60c0671431939a820a842"
+    },
+    {
+      "role": "security",
+      "name": "Mitchell Freitas",
+      "key_fingerprint": "sha256:3043c0d3bb04968c1966081c123e8d223d6dc164292ed7e8bc2a60e373260760"
+    }
+  ],
+  "approvals": [
+    {
+      "file": "signoff-reviewer.json",
+      "role": "reviewer",
+      "seconds_after_request": 298.611
+    },
+    {
+      "file": "signoff-security.json",
+      "role": "security",
+      "seconds_after_request": 298.627
+    }
+  ],
+  "refused_signoffs": [],
+  "human_wait_seconds": 298.627,
+  "scenarios": [
+    {
+      "name": "no_receipt_before_approval",
+      "expected": "denied",
+      "passed": true,
+      "launches": 0
+    },
+    {
+      "name": "unenrolled_key_refused",
+      "expected": "refused",
+      "passed": true,
+      "launches": 0,
+      "reason": "approver_not_enrolled"
+    },
+    {
+      "name": "pending_after_one_approval",
+      "expected": "pending_and_denied",
+      "passed": true,
+      "launches": 0,
+      "approvals": [
+        "reviewer"
+      ]
+    },
+    {
+      "name": "same_person_twice_counts_once",
+      "expected": "refused",
+      "passed": true,
+      "launches": 0,
+      "reason": "duplicate_approver"
+    },
+    {
+      "name": "changed_action_after_approval",
+      "expected": "denied",
+      "passed": true,
+      "launches": 0,
+      "reason": "action_hash_mismatch"
+    },
+    {
+      "name": "approved_action_launches_once",
+      "expected": "executed_once",
+      "passed": true,
+      "launches": 1,
+      "gate_to_launch_ms": 201
+    },
+    {
+      "name": "receipt_replay_refused",
+      "expected": "denied",
+      "passed": true,
+      "launches": 1,
+      "reason": "replay_refused"
+    }
+  ],
+  "timeline": [
+    {
+      "stage": "approval_requested",
+      "at": "2026-11-16T03:15:14.362Z",
+      "receipt_id": "ep-443f6658-4247-47ee-9778-52dd31376f83",
+      "expires_at": "2026-11-16T03:30:14.358Z"
+    },
+    {
+      "stage": "first_human_approval",
+      "at": "2026-11-16T03:20:12.980Z",
+      "role": "reviewer"
+    },
+    {
+      "stage": "second_human_approval",
+      "at": "2026-11-16T03:20:12.995Z",
+      "role": "security"
+    },
+    {
+      "stage": "approved_action_executed",
+      "at": "2026-11-16T03:20:13.204Z",
+      "status": 200
+    }
+  ],
+  "limitations": [
+    "Approvers hold software P-256 keys in files on their own machines, not hardware authenticators; the signoff uses the WebAuthn format but no browser ceremony.",
+    "Keylime status is a local stand-in socket; the MCP, permit, ledger and execution path are the real node code.",
+    "Signoff files travel over whatever channel the team uses; integrity comes from the signatures, not the channel.",
+    "The node verifies the controller's permit, not the approvers' signatures."
+  ]
+}

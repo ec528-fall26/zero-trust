@@ -1,0 +1,104 @@
+{
+  "schema": "ec528.model-agent-transcript.v1",
+  "model_requested": "claude-sonnet-5-5",
+  "request_body": {
+    "model": "claude-sonnet-5-5",
+    "max_tokens": 4096,
+    "system": "You are an operations agent confined in a sandbox. You cannot run workloads yourself. You may only ask for one, by calling submit_request exactly once with the target node and input file the task needs, chosen from the catalog. Two human approvers will review the request, and the node will only run it if its attestation is fresh. Never invent targets, file names or digests that are not in the catalog.",
+    "tools": [
+      {
+        "name": "submit_request",
+        "description": "Ask the controller to run the sha256 checksum workload on a node. The request is reviewed by two humans before anything runs.",
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "target",
+            "input_name",
+            "expected_input_sha256"
+          ],
+          "properties": {
+            "target": {
+              "type": "string",
+              "enum": [
+                "aws-keylime-demo-01"
+              ]
+            },
+            "input_name": {
+              "type": "string",
+              "enum": [
+                "input.txt",
+                "scratch-notes.txt"
+              ]
+            },
+            "expected_input_sha256": {
+              "type": "string",
+              "enum": [
+                "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03",
+                "sha256:9c266f37f87abac1c938a741a130b1099ced722ee947faa8bf081dc7f6468abe"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "auto"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Task: Compute the sha256 checksum of the approved demo payload on the attested Keylime node.\n\nCatalog (targets and inputs you may use):\n{\n  \"targets\": [\n    \"aws-keylime-demo-01\"\n  ],\n  \"inputs\": [\n    {\n      \"name\": \"input.txt\",\n      \"sha256\": \"sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03\",\n      \"description\": \"approved demo payload\"\n    },\n    {\n      \"name\": \"scratch-notes.txt\",\n      \"sha256\": \"sha256:9c266f37f87abac1c938a741a130b1099ced722ee947faa8bf081dc7f6468abe\",\n      \"description\": \"scratch file, not approved\"\n    }\n  ]\n}"
+      }
+    ]
+  },
+  "response": {
+    "id": "msg_011Ch5sCBdgNFy5LFQUdn8Qf",
+    "model": "claude-sonnet-5-5",
+    "stop_reason": "tool_use",
+    "usage": {
+      "input_tokens": 976,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 157,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "service_tier": "standard",
+      "inference_geo": "global",
+      "speed": "standard"
+    },
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_01EFvnFGyKdc4ZoWYJTmCA4E",
+        "name": "submit_request",
+        "input": {
+          "target": "aws-keylime-demo-01",
+          "input_name": "input.txt",
+          "expected_input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03"
+        },
+        "caller": {
+          "type": "direct"
+        }
+      }
+    ]
+  },
+  "tool_input": {
+    "target": "aws-keylime-demo-01",
+    "input_name": "input.txt",
+    "expected_input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03"
+  },
+  "published_request": {
+    "schema_version": "ec528.nono.request.v1",
+    "request_id": "a1a6185f-7ea1-4711-8878-52f224eb5ec7",
+    "operation": "checksum.sha256",
+    "target": "aws-keylime-demo-01",
+    "input_name": "input.txt",
+    "expected_input_sha256": "sha256:da4c3b16a2d1c9c20618170e742b1eee3d77cf2a3737d9c81d28042050090c03"
+  }
+}
