@@ -230,7 +230,7 @@ SHA-256 digests, so no tokens or keys end up in Git.
 | Supports | "The checks fail closed." Covers receipt binding, replay, malformed input, FIFO and symlink handling, and stale or mismatched Keylime results. |
 | Command | `make ci PYTHON=.venv/bin/python` |
 | Expected runtime | about 2 minutes |
-| Expected output | Python `Ran 45 tests ... OK`; Node all 123 passing on Linux, with `fail 0`. The node-enforcement and fd tests need Linux and are skipped on macOS. |
+| Expected output | Python `Ran 50 tests ... OK`; Node all 123 passing on Linux, with `fail 0`. The node-enforcement and fd tests need Linux and are skipped on macOS. |
 
 ### Experiment 1: nono confinement
 
@@ -371,10 +371,25 @@ descriptor in a stream instead.
 | | |
 | --- | --- |
 | Supports | "A real model, confined by nono, can only ask: it chooses a request, the watcher rebuilds it from the bytes on disk, and it launches once after two approvals. Inside the sandbox the real API key is absent, and the controller's state, the node's port, and every host except the model API (through nono's proxy) are unreachable." |
-| Setup | An Anthropic API key in `EC528_ANTHROPIC_API_KEY`, read without echoing (`read -rs EC528_ANTHROPIC_API_KEY; export EC528_ANTHROPIC_API_KEY`). nono 0.79 or newer. |
-| Command | `make demo3-model-agent` (add `--human-approvers` by running `node experiments/demo3_model_agent.mjs --human-approvers`). `make demo3-model-agent-replay` reproduces the recorded decision without the API. |
+| Setup | **Reference path (agreed with our TA):** the API agent with the project's Claude Console API key in `EC528_ANTHROPIC_API_KEY`. The key is scoped to a dedicated workspace with a spending limit and is shared with course staff privately, never in the repository. Read it without echoing: `read -rs EC528_ANTHROPIC_API_KEY; export EC528_ANTHROPIC_API_KEY`. nono 0.79 or newer. *Optional:* Claude Code as the agent (`--agent claude-code`), with a token from `claude setup-token` in `EC528_CLAUDE_OAUTH_TOKEN`. |
+| Command | `make demo3-model-agent` (for real approvers: `node experiments/demo3_model_agent.mjs --human-approvers`). Optional: `make demo3-claude-agent`. `make demo3-model-agent-replay` reproduces the recorded decision with no credential at all. |
 | Expected runtime | Under 30 seconds plus approval time. One model call of at most 1,024 output tokens. |
-| Expected output | `results/demo3-model-agent.json` with `"status": "pass"`, `agent_mode: "live_model"`, 6 scenarios passing (`sandbox_confinement_with_model_route`, `model_request_published`, `watcher_bound_trusted_material`, `pending_after_one_approval`, `model_request_launches_once`, `receipt_replay_refused`), and the model's transcript in `results/demo3-model-agent-transcript.json`. |
+| Expected output | `results/demo3-model-agent-claude-code.json` (or `demo3-model-agent.json`) with `"status": "pass"`, `agent_mode` `"live_claude_code"` or `"live_model"`, 6 scenarios passing (`sandbox_confinement_with_model_route`, `model_request_published`, `watcher_bound_trusted_material`, `pending_after_one_approval`, `model_request_launches_once`, `receipt_replay_refused`), and the agent's decision in the matching `*-transcript.json`. |
+
+**Claude Code as the agent (optional).** Following the nono project's own agent profiles,
+the agent can be Claude Code itself (`claude -p`), not only our minimal
+script. It runs under *our* profile rather than nono's Claude Code profile,
+because that profile is built to let a coding agent work freely, which is
+wider than our claim that the agent can only ask. Claude Code is given the
+Bash tool, and its only auto-approved command is
+`python3 model_agent.py --submit ...`; anything else is denied in
+non-interactive mode, and nono confines whatever does run. It authenticates
+with a subscription token from `claude setup-token`, which can only make
+model requests. nono's proxy injects that token as a bearer header, so the
+agent sees only a phantom value in `CLAUDE_CODE_OAUTH_TOKEN`; the variable
+holding the real token is denied by name, and only allow-listed variables
+reach the agent. Its configuration directory is a folder inside the sandbox
+workdir, so it never sees the operator's own Claude Code settings.
 
 **How the API key is handled.** The sandbox profile is generated with
 `--model-credential-env EC528_ANTHROPIC_API_KEY`. That replaces `"block": true`
@@ -393,8 +408,11 @@ controller's state cannot be reached.
 The model sees only the task, target names, input file names and their
 digests; it never sees the key, approver material or tokens. Its transcript
 (request body without headers, and the response) is committed as evidence.
-Each run costs one model call; a key with a spending limit, used only for this
-project, keeps a mistake cheap.
+With the API agent each run costs one model call (about half a cent); the
+project key's workspace spending limit caps any mistake. Course staff rerun the
+experiment live with that key, as agreed with our TA. Anyone without a key can
+reproduce the run with `make demo3-model-agent-replay`, which replays the
+recorded decision through the same sandbox, watcher, approvals and node.
 
 ## 5. Claims and limitations
 

@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "experiment": "demo3-trials",
+  "mode": "local",
+  "status": "pass",
+  "generated_at": "2026-11-15T08:41:09.317Z",
+  "repository_revision": "ce01a6332e07fdc965f0bbfe9e9489f7d6e654e8",
+  "repository_dirty": true,
+  "versions": {
+    "node": "v22.23.2"
+  },
+  "launch_evidence": "process_start_records",
+  "demo2_baseline": {
+    "runs_per_scenario": 1,
+    "node_side_checks": "none: the node launched for any holder of the MCP bearer token",
+    "latency": "not measured"
+  },
+  "totals": {
+    "trials": 20,
+    "scenario_runs": 260,
+    "scenario_runs_passed": 260,
+    "launches_observed": 140,
+    "launches_expected": 140,
+    "unauthorized_or_duplicate_launches": 0,
+    "duration_seconds": 20
+  },
+  "scenarios": [
+    {
+      "name": "quorum_approved_launch",
+      "expected": "executed_once",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    },
+    {
+      "name": "bearer_token_without_permit",
+      "expected": "refused",
+      "expected_launches_per_trial": 0,
+      "trials": 20,
+      "passed": 20,
+      "launches": 0,
+      "excess_launches": 0
+    },
+    {
+      "name": "forged_permit",
+      "expected": "refused",
+      "expected_launches_per_trial": 0,
+      "trials": 20,
+      "passed": 20,
+      "launches": 0,
+      "excess_launches": 0
+    },
+    {
+      "name": "expired_permit",
+      "expected": "refused",
+      "expected_launches_per_trial": 0,
+      "trials": 20,
+      "passed": 20,
+      "launches": 0,
+      "excess_launches": 0
+    },
+    {
+      "name": "old_enrollment_epoch",
+      "expected": "refused",
+      "expected_launches_per_trial": 0,
+      "trials": 20,
+      "passed": 20,
+      "launches": 0,
+      "excess_launches": 0
+    },
+    {
+      "name": "target_substitution",
+      "expected": "refused",
+      "expected_launches_per_trial": 0,
+      "trials": 20,
+      "passed": 20,
+      "launches": 0,
+      "excess_launches": 0
+    },
+    {
+      "name": "artifact_substitution",
+      "expected": "refused",
+      "expected_launches_per_trial": 0,
+      "trials": 20,
+      "passed": 20,
+      "launches": 0,
+      "excess_launches": 0
+    },
+    {
+      "name": "staged_input_substituted",
+      "expected": "refused_then_executed_once",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    },
+    {
+      "name": "stale_attestation",
+      "expected": "refused_then_executed_once",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    },
+    {
+      "name": "permit_replay",
+      "expected": "executed_once",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    },
+    {
+      "name": "race_10_clients",
+      "expected": "executed_once",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    },
+    {
+      "name": "redelivery_after_restart",
+      "expected": "executed_once",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    },
+    {
+      "name": "lost_response_after_launch",
+      "expected": "executed_once_and_receipt_burned",
+      "expected_launches_per_trial": 1,
+      "trials": 20,
+      "passed": 20,
+      "launches": 20,
+      "excess_launches": 0
+    }
+  ],
+  "latency": {
+    "definition": "gated = EMILIA receipt gate + controller + permit + node; baseline = the same node called directly with a valid permit (no quorum receipt, no controller gate). Approval time is excluded.",
+    "gated": {
+      "runs": 50,
+      "median_ms": 34.8,
+      "p95_ms": 41.2
+    },
+    "baseline": {
+      "runs": 50,
+      "median_ms": 23.7,
+      "p95_ms": 27.7
+    },
+    "overhead_median_ms": 11.1,
+    "failures": []
+  },
+  "workload_scaling": {
+    "definition": "Same paired measurement with the input replaced by pseudo-random data of each size. The node hashes the input before launch and the workload hashes it again. Demo 2 used a 32-byte input. The node reads at most 64 MiB of workload material and must refuse anything larger without launching.",
+    "runs_per_size": 5,
+    "node_material_limit_bytes": 67108864,
+    "sizes": [
+      {
+        "input": "1KB",
+        "bytes": 1024,
+        "gated": {
+          "runs": 5,
+          "median_ms": 46.8,
+          "p95_ms": 82.1
+        },
+        "baseline": {
+          "runs": 5,
+          "median_ms": 28.8,
+          "p95_ms": 39.1
+        },
+        "overhead_median_ms": 18,
+        "failures": []
+      },
+      {
+        "input": "1MB",
+        "bytes": 1048576,
+        "gated": {
+          "runs": 5,
+          "median_ms": 52.7,
+          "p95_ms": 57.9
+        },
+        "baseline": {
+          "runs": 5,
+          "median_ms": 37.7,
+          "p95_ms": 45.3
+        },
+        "overhead_median_ms": 15,
+        "failures": []
+      },
+      {
+        "input": "16MB",
+        "bytes": 16777216,
+        "gated": {
+          "runs": 5,
+          "median_ms": 132.8,
+          "p95_ms": 142.7
+        },
+        "baseline": {
+          "runs": 5,
+          "median_ms": 111.8,
+          "p95_ms": 114.1
+        },
+        "overhead_median_ms": 21,
+        "failures": []
+      },
+      {
+        "input": "64MB",
+        "bytes": 67108864,
+        "gated": {
+          "runs": 5,
+          "median_ms": 419,
+          "p95_ms": 1093.7
+        },
+        "baseline": {
+          "runs": 5,
+          "median_ms": 380.6,
+          "p95_ms": 708.3
+        },
+        "overhead_median_ms": 38.4,
+        "failures": []
+      }
+    ],
+    "over_limit": {
+      "bytes": 68157440,
+      "outcome": "refused",
+      "launches": 0,
+      "passed": true
+    }
+  },
+  "limitations": [
+    "Local mode: Keylime status is a stand-in socket; MCP, permits, ledger and execution are the real node code on this machine.",
+    "Approver keys are fixture keys (automation); human approval is measured separately by demo3_human_approval.",
+    "The baseline still includes the node's own permit and attestation checks, so overhead covers the controller-side gate only."
+  ]
+}

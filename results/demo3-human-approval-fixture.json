@@ -1,0 +1,121 @@
+{
+  "experiment": "demo3_human_approval",
+  "schema_version": 1,
+  "generated_at": "2026-11-15T08:40:48.583Z",
+  "repository_revision": "ce01a6332e07fdc965f0bbfe9e9489f7d6e654e8",
+  "repository_dirty": true,
+  "approver_mode": "fixture_automation",
+  "status": "pass",
+  "approvers": [
+    {
+      "role": "operator",
+      "name": "Fixture operator (automation)",
+      "key_fingerprint": "sha256:9213f8d1c0ed3d9c09bddcc0b634957d0f6a20a6deff2ddb18f830e755378b89"
+    },
+    {
+      "role": "security",
+      "name": "Fixture security (automation)",
+      "key_fingerprint": "sha256:d0d7175a24d769e30e3b55e9b1f561e3dc8904cf936297db9f27eb6b19773fd4"
+    },
+    {
+      "role": "reviewer",
+      "name": "Fixture reviewer (automation)",
+      "key_fingerprint": "sha256:ec2dea6ffad9988759f3123befc931514d734cf64214dd9915ee39d51f8a4639"
+    }
+  ],
+  "approvals": [
+    {
+      "file": "signoff-operator.json",
+      "role": "operator",
+      "seconds_after_request": 0.002
+    },
+    {
+      "file": "signoff-security.json",
+      "role": "security",
+      "seconds_after_request": 0.007
+    }
+  ],
+  "refused_signoffs": [],
+  "human_wait_seconds": 0.007,
+  "scenarios": [
+    {
+      "name": "no_receipt_before_approval",
+      "expected": "denied",
+      "passed": true,
+      "launches": 0
+    },
+    {
+      "name": "unenrolled_key_refused",
+      "expected": "refused",
+      "passed": true,
+      "launches": 0,
+      "reason": "approver_not_enrolled"
+    },
+    {
+      "name": "pending_after_one_approval",
+      "expected": "pending_and_denied",
+      "passed": true,
+      "launches": 0,
+      "approvals": [
+        "operator"
+      ]
+    },
+    {
+      "name": "same_person_twice_counts_once",
+      "expected": "refused",
+      "passed": true,
+      "launches": 0,
+      "reason": "duplicate_approver"
+    },
+    {
+      "name": "changed_action_after_approval",
+      "expected": "denied",
+      "passed": true,
+      "launches": 0,
+      "reason": "action_hash_mismatch"
+    },
+    {
+      "name": "approved_action_launches_once",
+      "expected": "executed_once",
+      "passed": true,
+      "launches": 1,
+      "gate_to_launch_ms": 186
+    },
+    {
+      "name": "receipt_replay_refused",
+      "expected": "denied",
+      "passed": true,
+      "launches": 1,
+      "reason": "replay_refused"
+    }
+  ],
+  "timeline": [
+    {
+      "stage": "approval_requested",
+      "at": "2026-11-15T08:40:48.371Z",
+      "receipt_id": "ep-f33966a4-5196-4f33-92cd-7087f3d70bed",
+      "expires_at": "2026-11-15T08:55:48.367Z"
+    },
+    {
+      "stage": "first_human_approval",
+      "at": "2026-11-15T08:40:48.380Z",
+      "role": "operator"
+    },
+    {
+      "stage": "second_human_approval",
+      "at": "2026-11-15T08:40:48.384Z",
+      "role": "security"
+    },
+    {
+      "stage": "approved_action_executed",
+      "at": "2026-11-15T08:40:48.572Z",
+      "status": 200
+    }
+  ],
+  "limitations": [
+    "Automation: fixture keys generated in this process, not real people.",
+    "Keylime status is a local stand-in socket; the MCP, permit, ledger and execution path are the real node code.",
+    "Signoff files travel over whatever channel the team uses; integrity comes from the signatures, not the channel.",
+    "The node verifies the controller's permit, not the approvers' signatures."
+  ]
+}

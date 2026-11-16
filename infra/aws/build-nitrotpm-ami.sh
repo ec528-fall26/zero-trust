@@ -20,6 +20,21 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 
 aws_() { aws --profile "$profile" --region "$region" "$@"; }
 
+# `aws ec2 wait image-available` gives up after about 10 minutes, and copying
+# an image can take longer, so poll for up to an hour.
+wait_available() {
+  for _attempt in $(seq 1 240); do
+    state=$(aws_ ec2 describe-images --image-ids "$1" --query 'Images[0].State' --output text 2>/dev/null || echo pending)
+    case "$state" in
+      available) return 0 ;;
+      failed|invalid|error|deregistered) echo "image $1 is $state" >&2; return 1 ;;
+    esac
+    sleep 15
+  done
+  echo "image $1 still not available after an hour" >&2
+  return 1
+}
+
 read -r arch root_device boot_mode tpm_support < <(aws_ ec2 describe-images \
   --image-ids "$source_ami" \
   --query 'Images[0].[Architecture,RootDeviceName,BootMode,TpmSupport]' \
@@ -48,7 +63,8 @@ copy_id=$(aws_ ec2 copy-image \
   --source-region "$region" \
   --name "ec528-alma10-copy-$stamp" \
   --query ImageId --output text)
-aws_ ec2 wait image-available --image-ids "$copy_id"
+echo "waiting for $copy_id (often 10-20 minutes)..." >&2
+wait_available "$copy_id"
 snapshot_id=$(aws_ ec2 describe-images --image-ids "$copy_id" \
   --query "Images[0].BlockDeviceMappings[?DeviceName=='$root_device'].Ebs.SnapshotId | [0]" \
   --output text)
@@ -69,7 +85,7 @@ ami_id=$(aws_ ec2 register-image \
   --root-device-name "$root_device" \
   --block-device-mappings "DeviceName=$root_device,Ebs={SnapshotId=$snapshot_id,VolumeType=gp3,DeleteOnTermination=true}" \
   --query ImageId --output text)
-aws_ ec2 wait image-available --image-ids "$ami_id"
+wait_available "$ami_id"
 
 # The intermediate copy is no longer needed; its snapshot backs the new AMI.
 aws_ ec2 deregister-image --image-id "$copy_id" >/dev/null

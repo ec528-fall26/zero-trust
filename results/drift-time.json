@@ -2,12 +2,12 @@
   "schema_version": 1,
   "experiment": "drift-time",
   "status": "pass",
-  "generated_at": "2026-11-05T00:19:43.372Z",
-  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "generated_at": "2026-11-15T08:40:46.564Z",
+  "repository_revision": "ce01a6332e07fdc965f0bbfe9e9489f7d6e654e8",
   "repository_dirty": true,
   "versions": {
-    "nono": "nono 0.79.0",
-    "node": "v24.11.0",
+    "nono": "nono 0.80.0",
+    "node": "v22.23.2",
     "emilia_require_receipt": "0.9.0"
   },
   "receipt_max_age_sec": 120,
@@ -34,7 +34,7 @@
       "name": "fresh_attestation_accepted",
       "passed": true,
       "observed": "accepted",
-      "reported_age_seconds": 5.348,
+      "reported_age_seconds": 5.506,
       "measured_skew_seconds": 0
     },
     {

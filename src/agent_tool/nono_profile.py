@@ -56,8 +56,34 @@ def _model_network(credential_env: str) -> dict[str, object]:
     }
 
 
+def _claude_code_network(token_env: str) -> dict[str, object]:
+    """Claude Code on a Claude subscription.  The real token (from
+    `claude setup-token`, scope user:inference) stays in the supervisor; the
+    proxy injects it as a bearer header and the agent sees a phantom value in
+    CLAUDE_CODE_OAUTH_TOKEN and a loopback ANTHROPIC_BASE_URL."""
+    if not _ENV_NAME.fullmatch(token_env):
+        raise RequestSubmissionError("Claude Code token variable name is invalid")
+    return {
+        "credentials": ["anthropic"],
+        "custom_credentials": {
+            "anthropic": {
+                "upstream": MODEL_UPSTREAM,
+                "credential_key": f"env://{token_env}",
+                "env_var": "CLAUDE_CODE_OAUTH_TOKEN",
+                "inject_header": "Authorization",
+                "credential_format": "Bearer {}",
+            },
+        },
+    }
+
+
 def build_profile(
-    *, outbox: Path, inbox: Path, model_credential_env: str | None = None
+    *,
+    outbox: Path,
+    inbox: Path,
+    model_credential_env: str | None = None,
+    claude_code_token_env: str | None = None,
+    agent_read: list[Path] | None = None,
 ) -> dict[str, object]:
     canonical_outbox = _canonical_directory(outbox, "outbox")
     canonical_inbox = _canonical_directory(inbox, "inbox")
@@ -67,10 +93,54 @@ def build_profile(
         raise RequestSubmissionError("outbox and inbox must not overlap")
     if canonical_outbox.stat().st_dev != canonical_inbox.stat().st_dev:
         raise RequestSubmissionError("outbox and inbox must be on the same trusted host")
-    model = model_credential_env is not None
+    if model_credential_env is not None and claude_code_token_env is not None:
+        raise RequestSubmissionError("choose one model route")
+    claude_code = claude_code_token_env is not None
+    model = model_credential_env is not None or claude_code
     allow_vars = ["HOME", "LANG", "LC_*", "PATH", "TERM", "TMPDIR"]
-    if model:
+    deny_vars = [
+        "*CREDENTIAL*",
+        "*KEY*",
+        "*PASSWORD*",
+        "*SECRET*",
+        "*TOKEN*",
+        "AZURE_*",
+        "EMILIA_*",
+        "KEYLIME_*",
+    ]
+    if model_credential_env is not None:
         allow_vars += ["EC528_MODEL_*", "*_BASE_URL"]
+        network = _model_network(model_credential_env)
+    elif claude_code:
+        # The phantom lives in CLAUDE_CODE_OAUTH_TOKEN, so *TOKEN* cannot be a
+        # blanket deny here; the variable holding the real token is denied by
+        # name, and only allow-listed variables reach the agent at all.
+        allow_vars += [
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
+            "CLAUDE_CONFIG_DIR",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+            "DISABLE_AUTOUPDATER",
+        ]
+        deny_vars = [name for name in deny_vars if name != "*TOKEN*"] + [
+            claude_code_token_env,
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "AWS_*",
+        ]
+        network = _claude_code_network(claude_code_token_env)
+    else:
+        network = {"block": True}
+    readable = [os.fspath(canonical_inbox)]
+    for path in agent_read or []:
+        # Read-only access for the agent's own program files (e.g. the
+        # Claude Code binary); never the controller's directories.
+        resolved = _canonical_directory(path, "agent read")
+        if _contains(resolved, canonical_outbox) or _contains(resolved, canonical_inbox):
+            raise RequestSubmissionError("agent read path must not contain the handoff")
+        readable.append(os.fspath(resolved))
     return {
         "meta": {
             "name": "ec528-nono-emilia-handoff",
@@ -89,9 +159,9 @@ def build_profile(
         },
         "filesystem": {
             "write": [os.fspath(canonical_outbox)],
-            "read": [os.fspath(canonical_inbox)],
+            "read": readable,
         },
-        "network": _model_network(model_credential_env) if model else {"block": True},
+        "network": network,
         "security": {
             "signal_mode": "isolated",
             "process_info_mode": "isolated",
@@ -104,16 +174,7 @@ def build_profile(
         },
         "environment": {
             "allow_vars": allow_vars,
-            "deny_vars": [
-                "*CREDENTIAL*",
-                "*KEY*",
-                "*PASSWORD*",
-                "*SECRET*",
-                "*TOKEN*",
-                "AZURE_*",
-                "EMILIA_*",
-                "KEYLIME_*",
-            ],
+            "deny_vars": deny_vars,
             "case_insensitive_vars": True,
         },
     }
@@ -127,12 +188,25 @@ def main(argv: list[str] | None = None) -> int:
         "--model-credential-env",
         help="name of the supervisor environment variable holding the Anthropic API key",
     )
+    parser.add_argument(
+        "--claude-code-token-env",
+        help="name of the supervisor environment variable holding a `claude setup-token` token",
+    )
+    parser.add_argument(
+        "--agent-read",
+        type=Path,
+        action="append",
+        default=[],
+        help="read-only directory the agent program needs (repeatable)",
+    )
     args = parser.parse_args(argv)
     try:
         profile = build_profile(
             outbox=args.outbox,
             inbox=args.inbox,
             model_credential_env=args.model_credential_env,
+            claude_code_token_env=args.claude_code_token_env,
+            agent_read=args.agent_read,
         )
     except RequestSubmissionError as error:
         print(f"nono-handoff-profile: {error}", file=sys.stderr)

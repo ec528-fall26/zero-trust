@@ -13,6 +13,12 @@ the phantom for the real key and forwards only to api.anthropic.com.
     python3 model_agent.py --task task.json --outbox OUTBOX --transcript t.json
     python3 model_agent.py --task task.json --outbox OUTBOX --replay t.json
     python3 model_agent.py --probe --forbidden-port 3000 [--forbidden-path P ...]
+
+With Claude Code as the agent, this file is its only way to act: Claude Code
+may run exactly `python3 model_agent.py --submit ...` and nothing else.
+
+    python3 model_agent.py --submit --task task.json --outbox OUTBOX \
+        --transcript t.json --target T --input-name N --sha256 sha256:...
 """
 from __future__ import annotations
 
@@ -244,6 +250,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--replay", type=Path, help="reuse a recorded model decision; no network")
     parser.add_argument("--model", default=os.environ.get("EC528_MODEL_NAME", DEFAULT_MODEL))
     parser.add_argument("--probe", action="store_true")
+    parser.add_argument("--submit", action="store_true", help="publish one request chosen by an outside agent")
+    parser.add_argument("--target")
+    parser.add_argument("--input-name")
+    parser.add_argument("--sha256")
     parser.add_argument("--forbidden-port", type=int, action="append", default=[])
     parser.add_argument("--forbidden-path", action="append", default=[])
     args = parser.parse_args(argv)
@@ -254,7 +264,21 @@ def main(argv: list[str] | None = None) -> int:
         if not args.task or not args.outbox:
             raise AgentError("--task and --outbox are required")
         task = json.loads(args.task.read_text(encoding="utf-8"))
-        if args.replay:
+        if args.submit:
+            # One request per session: a second --submit is refused.
+            if args.transcript and args.transcript.exists():
+                raise AgentError("a request was already submitted in this session")
+            tool_input = {
+                "target": args.target,
+                "input_name": args.input_name,
+                "expected_input_sha256": args.sha256,
+            }
+            transcript = {
+                "schema": "ec528.model-agent-transcript.v1",
+                "agent": "claude-code",
+                "tool_input": tool_input,
+            }
+        elif args.replay:
             transcript = json.loads(args.replay.read_text(encoding="utf-8"))
             tool_input = transcript["tool_input"]
             transcript = {**transcript, "replayed": True}

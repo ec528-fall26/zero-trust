@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import {
   chmod,
-  copyFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -19,6 +18,9 @@ import { permitSignerFromEnvironment } from '../src/controller/permit_signer.mjs
 import { loadRoster } from '../src/controller/approver_signoff.mjs';
 import { createDemoController } from '../src/demo/demo_controller.mjs';
 import { approvalInstructions, collectTwoApprovals, publishApprovalRequest } from './signoff_exchange.mjs';
+import {
+  agentKind, profileArguments, requireCredential, resolveClaude, runAgent, stageAgent,
+} from './model_agent_runner.mjs';
 import { assertSandboxCannotRead } from './sandbox_check.mjs';
 import {
   addEvent,
@@ -41,7 +43,9 @@ const HUMAN_APPROVERS = process.argv.includes('--human-approvers');
 // real key is read from EC528_ANTHROPIC_API_KEY by nono's credential proxy,
 // outside the sandbox; the agent gets a phantom token.
 const MODEL_AGENT = process.argv.includes('--model-agent');
-const MODEL_KEY_VARIABLE = 'EC528_ANTHROPIC_API_KEY';
+// --agent api (default, EC528_ANTHROPIC_API_KEY) or --agent claude-code
+// (EC528_CLAUDE_OAUTH_TOKEN from `claude setup-token`); see model_agent_runner.mjs.
+const AGENT_KIND = agentKind(process.argv);
 const TPM_TYPE = process.env.KEYLIME_TPM_TYPE || 'swtpm';
 const LIMITATIONS = Object.freeze([
   ...(TPM_TYPE === 'swtpm' ? ['swtpm is not a hardware root of trust.'] : []),
@@ -220,7 +224,7 @@ function scenarioRecord(name, expected, snapshot, passed, startedAt) {
 
 async function runExperiment() {
   const outputPath = path.resolve(
-    process.argv.slice(2).find((argument) => !argument.startsWith('--'))
+    process.argv.slice(2).find((argument, index, all) => !argument.startsWith('--') && all[index - 1] !== '--agent')
       || path.join(repositoryRoot, 'results', HUMAN_APPROVERS ? 'demo3-end-to-end-human.json' : 'demo2-end-to-end.json'),
   );
   const python = process.env.PYTHON_BIN || 'python3';
@@ -293,11 +297,13 @@ async function runExperiment() {
       expected_input_sha256: digest(input),
     };
     const profilePath = path.join(temporaryRoot, 'nono-profile.json');
+    if (MODEL_AGENT) requireCredential(AGENT_KIND);
+    const claude = MODEL_AGENT && AGENT_KIND === 'claude-code' ? await resolveClaude() : null;
     const generatedProfile = await requiredCommand(python, [
       path.join(repositoryRoot, 'src', 'agent_tool', 'nono_profile.py'),
       '--outbox', directories.outbox,
       '--inbox', directories.inbox,
-      ...(MODEL_AGENT ? ['--model-credential-env', MODEL_KEY_VARIABLE] : []),
+      ...(MODEL_AGENT ? profileArguments(AGENT_KIND, { claude }) : []),
     ], { env: { ...process.env, PYTHONPATH: path.join(repositoryRoot, 'src') } });
     await writeFile(profilePath, `${generatedProfile}\n`, { mode: 0o600 });
     mark('nono_profile_generated', 'success');
@@ -324,7 +330,6 @@ async function runExperiment() {
 
     let modelAgent = null;
     if (MODEL_AGENT) {
-      if (!process.env[MODEL_KEY_VARIABLE]) throw new Error(`--model-agent needs ${MODEL_KEY_VARIABLE}`);
       const task = {
         instruction: 'Compute the sha256 checksum of the approved demo payload on the attested Keylime node.',
         catalog: {
@@ -332,37 +337,18 @@ async function runExperiment() {
           inputs: [{ name: path.basename(inputPath), sha256: digest(input), description: 'approved demo payload' }],
         },
       };
-      await writeFile(path.join(directories.work, 'task.json'), JSON.stringify(task), { mode: 0o600 });
-      await copyFile(
-        path.join(repositoryRoot, 'src', 'agent_tool', 'model_agent.py'),
-        path.join(directories.work, 'model_agent.py'),
-      );
-      const agentOutput = await withSpan('nono.model_agent_writes_request', {}, () => (
-        requiredCommand(nono, [
-          'run', '--silent',
-          '--profile', profilePath,
-          '--workdir', directories.work,
-          '--allow-cwd',
-          '--strict-broker-path',
-          '--audit-integrity',
-          '--', '/usr/bin/python3', 'model_agent.py',
-          '--task', 'task.json', '--outbox', directories.outbox, '--transcript', 'transcript.json',
-        ], {
-          timeout: 180_000,
-          cwd: directories.work,
-          env: {
-            PATH: process.env.PATH,
-            HOME: process.env.HOME,
-            [MODEL_KEY_VARIABLE]: process.env[MODEL_KEY_VARIABLE],
-          },
-        })
+      await stageAgent(repositoryRoot, directories.work, task);
+      const agent = await withSpan('nono.model_agent_writes_request', {}, () => runAgent(
+        { nono, profilePath, workdir: directories.work },
+        AGENT_KIND,
+        { task, outbox: directories.outbox, claude },
       ));
-      requestId = JSON.parse(agentOutput).request_id;
-      const transcript = JSON.parse(await readFile(path.join(directories.work, 'transcript.json'), 'utf8'));
+      requestId = agent.requestId;
       modelAgent = {
-        model: transcript.response?.model || transcript.model_requested,
-        usage: transcript.response?.usage || null,
-        tool_input: transcript.tool_input,
+        agent: AGENT_KIND,
+        model: agent.model,
+        usage: agent.usage,
+        tool_input: agent.transcript.tool_input,
       };
     } else {
       const requestPath = path.join(directories.outbox, `${requestId}.json`);
