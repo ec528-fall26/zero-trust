@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ec528-nono-emilia-handoff"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema==4.25.1"
+]
+
+[project.scripts]
+submit-request = "agent_tool.submit_request:main"
+outbox-watcher = "controller.outbox_watcher:main"
+nono-handoff-profile = "agent_tool.nono_profile:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

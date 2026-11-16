@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "experiment": "drift-revocation",
+  "status": "pass",
+  "generated_at": "2026-11-05T00:19:43.537Z",
+  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "repository_dirty": true,
+  "versions": {
+    "nono": "nono 0.79.0",
+    "node": "v24.11.0",
+    "emilia_require_receipt": "0.9.0"
+  },
+  "scenarios": [
+    {
+      "name": "no_revocations_executes",
+      "passed": true,
+      "observed": "executed_once",
+      "http_status": 200
+    },
+    {
+      "name": "unrelated_key_revoked_executes",
+      "passed": true,
+      "observed": "executed_once",
+      "http_status": 200
+    },
+    {
+      "name": "approver_revoked_after_signing_refused",
+      "passed": true,
+      "observed": "approver_key_revoked",
+      "http_status": 428
+    },
+    {
+      "name": "revocation_refusal_does_not_burn_receipt",
+      "passed": true,
+      "observed": "executed_once",
+      "http_status": 200
+    },
+    {
+      "name": "revocation_list_unavailable_refused",
+      "passed": true,
+      "observed": "revocation_unavailable",
+      "http_status": 428
+    },
+    {
+      "name": "stale_revocation_list_refused",
+      "passed": true,
+      "observed": "revocation_list_stale",
+      "http_status": 428
+    },
+    {
+      "name": "forged_revocation_list_refused",
+      "passed": true,
+      "observed": "revocation_list_invalid",
+      "http_status": 428
+    },
+    {
+      "name": "revocation_seen_before_rollback",
+      "passed": true,
+      "observed": "approver_key_revoked",
+      "http_status": 428,
+      "sequence": 9
+    },
+    {
+      "name": "rolled_back_revocation_list_refused",
+      "passed": true,
+      "observed": "revocation_list_rollback",
+      "http_status": 428,
+      "sequence_seen": 9,
+      "sequence_replayed": 4
+    }
+  ],
+  "limitations": [
+    "The revocation list is served from memory and signed by a local demo authority. There is no real distribution channel, and nobody operates the authority.",
+    "Receipts are refused if any signer is on the list, whether the key was revoked before or after signing. Time of signing is not consulted.",
+    "The highest list sequence seen is kept in memory only, so a controller restart forgets it and an old list could be replayed after one.",
+    "Approver keys are ephemeral local demo keys on one machine."
+  ]
+}

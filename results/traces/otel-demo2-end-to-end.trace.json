@@ -1,0 +1,973 @@
+{
+    "data": [
+        {
+            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+            "spans": [
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "56f71dc5ce8de288",
+                    "operationName": "scenario.no_receipt",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511710941000,
+                    "duration": 3169,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "denied"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 428
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": false
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "0d9df8c5d8f20500",
+                    "operationName": "scenario.action_changed_after_approval",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511710948000,
+                    "duration": 1505,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "denied"
+                        },
+                        {
+                            "key": "ec528.refusal_reason",
+                            "type": "string",
+                            "value": "action_hash_mismatch"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 428
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": false
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "af7c46f0e7e23404",
+                    "operationName": "ssm.run_command",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511796903000,
+                    "duration": 859012,
+                    "tags": [
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "ssm.command_count",
+                            "type": "int64",
+                            "value": 2
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "c8233fa327eb8197",
+                    "operationName": "nono.agent_writes_request",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511707611000,
+                    "duration": 140211,
+                    "tags": [
+                        {
+                            "key": "ec528.request_id",
+                            "type": "string",
+                            "value": "76697d70-6067-46bd-851d-2a7d6f060f27"
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "3a1be74455654743",
+                    "operationName": "scenario.one_of_three_signatures",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511710945000,
+                    "duration": 384,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "pending_and_denied"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 428
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": false
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "da53f91346cf7f48",
+                    "operationName": "keylime.mcp.attest_and_deploy",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "6b137f7c38ac5716"
+                        }
+                    ],
+                    "startTime": 1792511710962000,
+                    "duration": 1421311,
+                    "tags": [
+                        {
+                            "key": "ec528.occurrence_id",
+                            "type": "string",
+                            "value": "69fca004-03a0-41e7-8366-4f667fdd378f"
+                        },
+                        {
+                            "key": "ec528.target",
+                            "type": "string",
+                            "value": "aws-keylime-demo-01"
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "keylime.verdict",
+                            "type": "string",
+                            "value": "trusted"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": true
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "6b137f7c38ac5716",
+                    "operationName": "scenario.exact_action_end_to_end",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511710950000,
+                    "duration": 1446231,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "executed_once"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 200
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": true
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "b1e4fe5a08c599ff",
+                    "operationName": "scenario.used_receipt_replay",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511712397000,
+                    "duration": 2425,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "denied"
+                        },
+                        {
+                            "key": "ec528.refusal_reason",
+                            "type": "string",
+                            "value": "replay_refused"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 428
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": false
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "e319336e6a0f7a1f",
+                    "operationName": "ssm.run_command",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511749520000,
+                    "duration": 45386751,
+                    "tags": [
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "ssm.command_count",
+                            "type": "int64",
+                            "value": 9
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "9be38bcb81d031a8",
+                    "operationName": "demo2.end_to_end",
+                    "references": [],
+                    "startTime": 1792511650396000,
+                    "duration": 155553035,
+                    "tags": [
+                        {
+                            "key": "ec528.passed",
+                            "type": "bool",
+                            "value": true
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        }
+                    ],
+                    "logs": [
+                        {
+                            "timestamp": 1792511707610481,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "nono_profile_generated"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511707757377,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "nono_agent_request_written"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                },
+                                {
+                                    "key": "request_id",
+                                    "type": "string",
+                                    "value": "76697d70-6067-46bd-851d-2a7d6f060f27"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511707853722,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "watcher_action_constructed"
+                                },
+                                {
+                                    "key": "occurrence_id",
+                                    "type": "string",
+                                    "value": "69fca004-03a0-41e7-8366-4f667fdd378f"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                },
+                                {
+                                    "key": "policy_version",
+                                    "type": "string",
+                                    "value": "demo-2.1"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511709921787,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "ssm_tunnel_ready"
+                                },
+                                {
+                                    "key": "instance_id",
+                                    "type": "string",
+                                    "value": "i-073d4356a44dc991f"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511710944914,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "emilia_first_distinct_signature"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "pending"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511710947597,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "emilia_second_distinct_signature"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "receipt_issued"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511713268137,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "keylime_agent_stopped"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511749519391,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "keylime_agent_recovery_started"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "started"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511794906772,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "keylime_agent_restarted"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                }
+                            ]
+                        },
+                        {
+                            "timestamp": 1792511796314308,
+                            "fields": [
+                                {
+                                    "key": "event",
+                                    "type": "string",
+                                    "value": "readonly_inbox_status_observed"
+                                },
+                                {
+                                    "key": "outcome",
+                                    "type": "string",
+                                    "value": "success"
+                                }
+                            ]
+                        }
+                    ],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "6870057fdc584865",
+                    "operationName": "ssm.tunnel_open",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511707855000,
+                    "duration": 2067286,
+                    "tags": [
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "6a3bdfe4452ab4fe",
+                    "operationName": "scenario.keylime_agent_stopped",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511748271000,
+                    "duration": 1248731,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "denied"
+                        },
+                        {
+                            "key": "ec528.refusal_reason",
+                            "type": "string",
+                            "value": "effect_indeterminate"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 500
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": false
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "9dea090d4ac34f3e",
+                    "operationName": "keylime.mcp.attest_and_deploy",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "533607b448728ee2"
+                        }
+                    ],
+                    "startTime": 1792511794919000,
+                    "duration": 1251645,
+                    "tags": [
+                        {
+                            "key": "ec528.occurrence_id",
+                            "type": "string",
+                            "value": "69fca004-03a0-41e7-8366-4f667fdd378f"
+                        },
+                        {
+                            "key": "ec528.target",
+                            "type": "string",
+                            "value": "aws-keylime-demo-01"
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "keylime.verdict",
+                            "type": "string",
+                            "value": "trusted"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": true
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "533607b448728ee2",
+                    "operationName": "scenario.keylime_agent_recovered",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511794909000,
+                    "duration": 1275283,
+                    "tags": [
+                        {
+                            "key": "ec528.expected",
+                            "type": "string",
+                            "value": "executed_once"
+                        },
+                        {
+                            "key": "http.response.status_code",
+                            "type": "int64",
+                            "value": 200
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "workload.executed",
+                            "type": "bool",
+                            "value": true
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "5146d97d86c0d9e0",
+                    "operationName": "watcher.build_trusted_action",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511707758000,
+                    "duration": 95603,
+                    "tags": [
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "c83d50e25041df21",
+                    "operationName": "ssm.run_command",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "9be38bcb81d031a8"
+                        }
+                    ],
+                    "startTime": 1792511712401000,
+                    "duration": 866817,
+                    "tags": [
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        },
+                        {
+                            "key": "ssm.command_count",
+                            "type": "int64",
+                            "value": 1
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                },
+                {
+                    "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                    "spanID": "d2d27ffb869c9622",
+                    "operationName": "keylime.mcp.attest_and_deploy",
+                    "references": [
+                        {
+                            "refType": "CHILD_OF",
+                            "traceID": "1f261c0afe3ab0c13d9d2db9246d93cf",
+                            "spanID": "6a3bdfe4452ab4fe"
+                        }
+                    ],
+                    "startTime": 1792511748291000,
+                    "duration": 1214346,
+                    "tags": [
+                        {
+                            "key": "ec528.occurrence_id",
+                            "type": "string",
+                            "value": "69fca004-03a0-41e7-8366-4f667fdd378f"
+                        },
+                        {
+                            "key": "ec528.target",
+                            "type": "string",
+                            "value": "aws-keylime-demo-01"
+                        },
+                        {
+                            "key": "error",
+                            "type": "bool",
+                            "value": true
+                        },
+                        {
+                            "key": "internal.span.format",
+                            "type": "string",
+                            "value": "otlp"
+                        },
+                        {
+                            "key": "otel.scope.name",
+                            "type": "string",
+                            "value": "ec528-zero-trust-experiments"
+                        },
+                        {
+                            "key": "otel.status_code",
+                            "type": "string",
+                            "value": "ERROR"
+                        },
+                        {
+                            "key": "otel.status_description",
+                            "type": "string",
+                            "value": "Keylime MCP call failed closed"
+                        },
+                        {
+                            "key": "span.kind",
+                            "type": "string",
+                            "value": "internal"
+                        }
+                    ],
+                    "logs": [],
+                    "processID": "p1",
+                    "warnings": null
+                }
+            ],
+            "processes": {
+                "p1": {
+                    "serviceName": "ec528-demo2-end-to-end",
+                    "tags": []
+                }
+            },
+            "warnings": null
+        }
+    ],
+    "total": 0,
+    "limit": 0,
+    "offset": 0,
+    "errors": null
+}

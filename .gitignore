@@ -1,10 +1,12 @@
 # Build output
 build/
+.demo/
 dist/
 target/
 *.o
 *.so
 *.pyc
+*.egg-info/
 __pycache__/
 
 # Environments

@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "experiment": "drift-policy",
+  "status": "pass",
+  "generated_at": "2026-11-05T00:19:39.994Z",
+  "repository_revision": "0aabc18639cfef8054ddebb4e0b6dab0a40f998c",
+  "repository_dirty": true,
+  "versions": {
+    "nono": "nono 0.79.0",
+    "node": "v24.11.0",
+    "emilia_require_receipt": "0.9.0"
+  },
+  "reference_policy_version": "pd1-a9159e3d6bed9ff773a97a90ac1ba6ccbd5589b9ccf72d4efa29811aab1d",
+  "scenarios": [
+    {
+      "name": "consistent_policies_execute",
+      "passed": true,
+      "observed": "executed_once",
+      "policy_version": "pd1-e301fb05fcd696cdbfdfcfd8442be31330c105be78b20bb9669ab7627814"
+    },
+    {
+      "name": "keylime_allowlist_changed_on_node",
+      "passed": true,
+      "observed": "node_refused_workload_not_run",
+      "http_status": 500,
+      "workload_runs": 0
+    },
+    {
+      "name": "hand_typed_label_refused",
+      "passed": true,
+      "observed": "policy_version_mismatch",
+      "http_status": 428
+    },
+    {
+      "name": "control_gate_with_unchanged_policies",
+      "passed": true,
+      "observed": "executed_once",
+      "http_status": 200
+    },
+    {
+      "name": "approver_roster_changed",
+      "passed": true,
+      "observed": "policy_version_mismatch",
+      "http_status": 428,
+      "handler_invocations": 0
+    },
+    {
+      "name": "quorum_threshold_lowered",
+      "passed": true,
+      "observed": "policy_version_mismatch",
+      "http_status": 428,
+      "handler_invocations": 0
+    },
+    {
+      "name": "approval_window_changed",
+      "passed": true,
+      "observed": "policy_version_mismatch",
+      "http_status": 428,
+      "handler_invocations": 0
+    },
+    {
+      "name": "issuer_key_rotated",
+      "passed": true,
+      "observed": "policy_version_mismatch",
+      "http_status": 428,
+      "handler_invocations": 0
+    },
+    {
+      "name": "keylime_allowlist_changed_on_controller",
+      "passed": true,
+      "observed": "policy_version_mismatch",
+      "http_status": 428,
+      "handler_invocations": 0
+    }
+  ],
+  "limitations": [
+    "The node handler is the real attest-and-deploy code, but the Keylime status it reads is a fixed PASS document. No TPM or Keylime service is involved.",
+    "The approval policy bundle is exported by the controller and copied to the node as a file in this experiment. The AWS deployment scripts do not do this yet.",
+    "Approver and issuer keys are ephemeral local demo keys on one machine.",
+    "A node-side refusal happens after the receipt is reserved, so it burns the approval (effect_indeterminate). That is existing behaviour, recorded here as observed."
+  ]
+}
